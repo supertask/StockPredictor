@@ -24,17 +24,21 @@ def convert_k_values(value):
 # Generic function to clean and save data
 def clean_and_save_data(input_path, drop_columns, result_conversion=None, additional_processing=None, rename_columns=None):
     data = pd.read_csv(input_path)
-    data_cleaned = data.drop(columns=drop_columns)
-    data_cleaned['公表日時'] = data_cleaned['公表日時'].apply(convert_date_format_revised)
-    data_cleaned.sort_values(by='公表日時', inplace=True)  # 公表日時でソート
+    translations = { '公表日時': 'Date', '時間': 'Time', '結果': 'Result' }
+    data.rename(columns=translations, inplace=True)
 
-    data_cleaned = data_cleaned[data_cleaned['結果'].notna() & data_cleaned['結果'].ne('') & data_cleaned['結果'].ne(' ')]
+    data_cleaned = data.drop(columns=drop_columns)
+    data_cleaned['Date'] = data_cleaned['Date'].apply(convert_date_format_revised)
+    data_cleaned.sort_values(by='Date', inplace=True)  # Dateでソート
+
+
+    data_cleaned = data_cleaned[data_cleaned['Result'].notna() & data_cleaned['Result'].ne('') & data_cleaned['Result'].ne(' ')]
 
     if additional_processing:
         data_cleaned = additional_processing(data_cleaned)
 
     if result_conversion:
-        data_cleaned['結果'] = data_cleaned['結果'].apply(result_conversion)
+        data_cleaned['Result'] = data_cleaned['Result'].apply(result_conversion)
 
     if rename_columns:
         data_cleaned.rename(columns=rename_columns, inplace=True)
@@ -46,11 +50,11 @@ def clean_and_save_data(input_path, drop_columns, result_conversion=None, additi
 
 # Additional processing functions
 def remove_empty_results(data):
-    data['結果'] = data['結果'].astype(str)
-    return data[data['結果'].str.strip() != '']
+    data['Result'] = data['Result'].astype(str)
+    return data[data['Result'].str.strip() != '']
 
 def remove_whitespace_from_time(data):
-    data['時間'] = data['時間'].str.strip()
+    data['Time'] = data['Time'].str.strip()
     return data
 
 # Functions for each dataset
@@ -60,7 +64,7 @@ def convert_cb_consumer_confidence(input_path):
 def convert_percent_csv(input_path):
     clean_and_save_data(input_path, COMMON_DROP_OFF_COLUMNS, 
                         result_conversion=lambda x: pd.to_numeric(x.rstrip('%'), errors='coerce'),
-						rename_columns={'結果': '結果（%）'})
+						rename_columns={'Result': 'Result(%)'})
 
 def convert_k_value_csv(input_path):
     clean_and_save_data(input_path, COMMON_DROP_OFF_COLUMNS, 
