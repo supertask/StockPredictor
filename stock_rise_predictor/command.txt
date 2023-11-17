@@ -87,6 +87,25 @@ def process_data_for_date(driver, date):
 
     return all_data
 
+
+
+def create_database():
+    # データベース接続の作成
+    conn = sqlite3.connect('timely_disclosure.db')
+    cur = conn.cursor()
+
+    # テーブルの作成
+    cur.execute('''CREATE TABLE IF NOT EXISTS TimelyDisclosure
+                   (date TEXT, time TEXT, code TEXT, title TEXT)''')
+    cur.execute('''CREATE TABLE IF NOT EXISTS UpwardEvaluation
+                   (code TEXT, start_time TEXT, end_time TEXT, evaluation INTEGER)''')
+    cur.execute('''CREATE TABLE IF NOT EXISTS Company
+                   (code TEXT, name TEXT)''')
+
+    return conn
+
+
+
 def main():
     # Setup WebDriver
     chrome_options = Options()
@@ -163,19 +182,20 @@ Time,Code,CompanyName,Title
 17:45,87830,ＧＦＡ,（開示事項の経過）美容脱毛サロン事業の譲渡に関する基本合意のお知らせ(最終合意の再延長)
 17:35,62980,ワイエイシイＨＤ,役員人事に関するお知らせ
 ======
-のような結果を得られます。CSVで保存するのは効率が悪いので、SQLiteで出力したいです。
+のような結果を得られます。CSVで保存するのは効率が悪いので、
+    for date_index in range(start_date_index, start_date_index + 1):
+の箇所で, SQLiteのデータベースに出力したいです。
 
-
-
-
-
-
-
-SQLiteで以下のテーブルを作ってください。
+SQLiteのテーブルの以下のような形式です。
 
 Timely disclosure テーブル
-	日時, 時間, 会社コード, タイトル
-	例： 2021-11-27, 18:15, 31790, シュッピン,2024年３月期　第２四半期　決算説明会資料
+	日にち, 時間, 会社コード, タイトル
+	例： 2021-11-27, 18:15, 31790, シュッピン, 2024年３月期　第２四半期　決算説明会資料
 
-Counter テーブル
-	会社コード, 
+上昇評価値 テーブル (ソースコードの中のCounterの結果を入れる)
+	会社コード, 開始時間, 終了時間, 評価値
+	
+会社テーブル
+	会社コード, 会社名
+	
+それぞれのテーブルに適切にデータが出力されるように修正してください。
