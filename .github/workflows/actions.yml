@@ -1,0 +1,39 @@
+# Chat: https://chat.openai.com/share/abbfe00c-5438-417f-8bd4-e8ec27f4c5ce
+on:
+  schedule:
+    - cron: '0 0 * * *' # 0時 (UTC) / 9時 (JST)
+    - cron: '0 1 * * *' # 1時 (UTC) / 10時 (JST)
+    - cron: '0 2 * * *' # 2時 (UTC) / 11時 (JST)
+    - cron: '0 3 * * *' # 3時 (UTC) / 12時 (JST)
+    - cron: '0 4 * * *' # 4時 (UTC) / 13時 (JST)
+    - cron: '0 5 * * *' # 5時 (UTC) / 14時 (JST)
+    - cron: '0 6 * * *' # 6時 (UTC) / 15時 (JST)
+jobs:
+  selenium:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          architecture: 'x64'
+          
+      - name: Install dependencies
+          pip install get-chrome-driver --upgrade
+          pip install -r selenium/requirements.txt
+
+      - name: Run script
+      - run: |
+          cd stock_rise_predictor/
+          python predictor.py
+
+      - name: Commit and push if changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "Update database" -a || echo "No changes to commit"
+          git push
