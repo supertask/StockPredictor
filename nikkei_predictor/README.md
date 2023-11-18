@@ -33,3 +33,4 @@ coming soon..
 	- [米国 鉱工業生産（重要度: ⭐️⭐）](https://jp.investing.com/economic-calendar/industrial-production-161)
 	- [米国 ミシガン大学消費者信頼感指数（重要度: ⭐️⭐）](https://jp.investing.com/economic-calendar/michigan-consumer-sentiment-320)
 	- [米国 個人支出（重要度: ⭐️⭐️）](https://jp.investing.com/economic-calendar/personal-spending-235)
+

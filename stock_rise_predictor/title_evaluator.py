@@ -17,21 +17,47 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 import db
 from config import config
 
-# TODO: ニュースや適時開示の情報の中に以下のような株価を押し上げる情報があるかをChatGPTに聞くAPIを作る
+# TODO:
+# ニュースや適時開示の情報の中に以下のような株価を押し上げる情報があるかをChatGPTに聞くAPIを作る
 # - 新製品やサービスの発表
 # - 戦略的提携やパートナーシップ
 # - 財務健全性の改善
 # - 新たな市場への進出
 # - 経営陣の変更
 # - 特許取得や技術的な進歩
+#
+# テンバガーの人がみている適時開示情報
+#「決算短信」
+#「中期経営計画」
+#「業績予想の修正」
+#「受注」
+#「月次情報」
 
-keywords = [
-    (("配当", "修正"), ("増配",)),
-    ("株式", "分割"),
-    ("自己株式取得",),
-    ("上方修正",),
-    ("業績予想", "修正")
+search_conditions = [
+    {
+        # ((A, B), (C)) => (A & B) or C
+        "condition": lambda title:  ("配当" in title and "修正" in title) or "増配" in title,
+        "tag": "配当"
+    },
+    {
+        "condition": lambda title:  "株式" in title and "分割" in title,
+        "tag": "株式分割"
+    },
+    {
+        "condition": lambda title: "自己株式取得" in title,
+        "tag": "自己株式取得"
+    },
+    {
+        "condition": lambda title: "上方修正" in title,
+        "tag": "株式分割"
+    },
+    {
+        "condition": lambda title:  "業績予想" in title and "修正" in title,
+        "tag": "業績予想の修正"
+    },
 ]
+
+# 決算短信
 
 def get_datetime_now():
     jst = pytz.timezone('Asia/Tokyo')
@@ -146,35 +172,46 @@ def scrape_in_days(conn, start_date_index = None, end_date_index = None):
 
         # 日付ごとのデータ処理
         company, time_disclosue = get_disclosure_records_in_day(driver, date)
-        insert_data(conn, "Company", company)
-        insert_data(conn, "TimelyDisclosure", time_disclosue)
+        db.insert_data(conn, "Company", company)
+        db.insert_data(conn, "TimelyDisclosure", time_disclosue)
     driver.quit() # ブラウザの終了
     
 def evaluate(conn, search_date):
-    timely_disclosure_table = fetch_timely_disclosure(conn, search_date)
-    company_count = Counter()
+    timely_disclosure_table = db.fetch_timely_disclosure(conn, search_date)
+    #company_count = Counter()
+
+    evaluations = { }
     for date, _, code, title in timely_disclosure_table:
-        for keyword_group in keywords:
-            if isinstance(keyword_group[0], tuple):
-                # 複数のキーワードグループのいずれかが含まれているかチェック
-                if any(all(keyword in title for keyword in group) for group in keyword_group):
-                    company_count[code] += 1
-                    break  # 一致したらその他のキーワードグループはチェック不要
-            else:
-                # すべてのキーワードが含まれている必要がある
-                if all(keyword in title for keyword in keyword_group):
-                    company_count[code] += 1
-                    break  # 一致したらその他のキーワードグループはチェック不要
-    evaluation_data = [(code, format_datetime_str(search_date), count) for code, count in company_count.items()]
-    insert_data(conn, "UpwardEvaluation", evaluation_data)
-    return company_count
+        for search_condition in search_conditions:
+
+            found_keywords_in_title = search_condition['condition'](title)
+            if found_keywords_in_title:
+                if code == "83160":
+                    print(title, found_keywords_in_title, search_condition['tag'])
+
+                tag = search_condition['tag']
+                if code in evaluations:
+                    evaluations[code]["evaluated_value"] += 1
+                    evaluations[code]["tags"] = evaluations[code]["tags"] + ',' + tag
+                else:
+                    evaluations[code] = {
+                        "evaluated_value": 1,
+                        "tags": tag
+                    }
+                #company_count[code] += 1
+                break
+    evaluation_data = [
+        (code, format_datetime_str(search_date), evaluation["evaluated_value"], evaluation["tags"])
+        for code, evaluation in evaluations.items()
+    ]
+    db.insert_data(conn, "UpwardEvaluation", evaluation_data)
 
 def scrape_in_day():
     start_date_index = 1 if is_trading_hours() else 2
     scrape_in_days(start_date_index, start_date_index + 1)
 
 def scrape():
-    conn = create_database()
+    conn = db.create_database()
 
     skip_scraping = config['scraping']['skip_scraping']
     if not skip_scraping:
@@ -190,18 +227,15 @@ def scrape():
     #yesterday_datetime = current_datetime - timedelta(days=1)
     #target_datetime = current_datetime if is_trading_hours() else yesterday_datetime
     
-    search_date = config['evaluate']['search_date']
-    for i in range(1, 10):
-        saerch_date = search_date - timedelta(days=i)
-        evaluate(conn, saerch_date)
+    end_date = config['evaluate']['end_date']
+    days = config['evaluate']['days_before_end_date']
+    for i in range(1, days):
+        evaluate_date = end_date - timedelta(days=i)
+        evaluate(conn, evaluate_date)
 
-    # 上位5社をランキング化
-    top_companies = company_count.most_common(5)
-    
-    # ランキングの表示
-    print("Top 5 Companies:")
-    for i, (code, count) in enumerate(top_companies, start=1):
-        print(f"{i}. Code: {code}, Count: {count}")
+    top_evaluations = db.fetch_top_evaluations(conn)
+    for evaluation in top_evaluations:
+        print(evaluation)
 
     conn.close()
 

@@ -15,6 +15,7 @@ config = {
 		"start_date_index": 4
 	},
 	"evaluate": {
-		"search_date": today,
+		"end_date": today,
+		"days_before_end_date": 10
 	}
 }
