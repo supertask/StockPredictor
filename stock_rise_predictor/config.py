@@ -8,17 +8,15 @@ def get_datetime_now():
 today = get_datetime_now()
 yesterday = today - timedelta(days=1)
 
-_analyze_tags = [
+_watch_pdf_tags = [
 	{
-		{
-			"tag": "決算短信",
-			"condition": lambda title: "決算" in title and "短信 ",
-			"path": "input/kessan_tanshin_pdf_prompt.txt"
-		},
-	}
+		"tag": "決算短信",
+		"condition": lambda title: "決算" in title and "短信 ",
+		"path": "input/kessan_tanshin_pdf_prompt.txt"
+	},
 ]
 
-_rise_tags = [
+_rise_stock_tags = [
 	{
 		# ((A, B), (C)) => (A & B) or C
 		"tag": "配当",
@@ -47,7 +45,7 @@ _rise_tags = [
 	},
 ]
 
-_analyze_tags += _rise_tags
+_watch_pdf_tags += _rise_stock_tags
 
 
 config = {
@@ -62,7 +60,7 @@ config = {
 		"top_evaluations_limit": 5, #トップのN社を列挙する
 	},
 	"disclosure" : {
-		"analyze_tags": _analyze_tags,
-		"rise_tags": _rise_tags,
+		"watch_pdf_tags": _watch_pdf_tags,
+		"rise_stock_tags": _rise_stock_tags,
 	},
 }

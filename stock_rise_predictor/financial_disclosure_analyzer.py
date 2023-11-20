@@ -102,8 +102,8 @@ class FinancialDisclosureAnalyzer:
 
 # 使用例
 pdf_paths = [
-    #'input/timely_disclosure/83160_三井住友銀行/140120231013566890.pdf', #短信
-    'input/timely_disclosure/43740_Ｇ－ロボペイ/140120231113587641.pdf', #短信
+    ['input/timely_disclosure/83160_三井住友銀行/140120231013566890.pdf',"決算短信"], #短信
+    ['input/timely_disclosure/43740_Ｇ－ロボペイ/140120231113587641.pdf', "決算短信"], #短信
     #'input/timely_disclosure/22010_森永製菓株式会社/140120231109583676.pdf', #短信
 ]
 analyzer = FinancialDisclosureAnalyzer(pdf_paths)

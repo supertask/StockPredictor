@@ -159,35 +159,28 @@ def scrape_in_days(conn, start_date_index = None, end_date_index = None):
             print(f"Skipped: date = {date}")
             continue
 
-
         db.insert_data(conn, "Company", company)
         db.insert_data(conn, "TimelyDisclosure", time_disclosue)
     driver.quit() # ブラウザの終了
     
-def evaluate(conn, search_date):
-    timely_disclosure_table = db.fetch_timely_disclosure(conn, search_date)
-    #company_count = Counter()
+def count_rise_tags(conn, search_date):
+    rise_tags = [tag_info['tag'] for tag_info in config["disclosure"]['rise_stock_tags']]
+    tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
+
+    timely_disclosure_table = db.fetch_timely_disclosure(conn,
+        condition_line = f"date = ? and tag in ({tag_questions})",
+        params = [format_datetime_str(search_date)] + rise_tags)
 
     evaluations = { }
-    for date, _, code, title in timely_disclosure_table:
-        for search_condition in config["disclosure"]['rise_tags']:
-
-            found_keywords_in_title = search_condition['condition'](title)
-            if found_keywords_in_title:
-                #if code == "83160":
-                #    print(title, found_keywords_in_title, search_condition['tag'])
-
-                tag = search_condition['tag']
-                if code in evaluations:
-                    evaluations[code]["evaluated_value"] += 1
-                    evaluations[code]["tags"] = evaluations[code]["tags"] + ',' + tag
-                else:
-                    evaluations[code] = {
-                        "evaluated_value": 1,
-                        "tags": tag
-                    }
-                #company_count[code] += 1
-                break
+    for date, time, code, title, tag in timely_disclosure_table:
+        if code in evaluations:
+            evaluations[code]["evaluated_value"] += 1
+            evaluations[code]["tags"] = evaluations[code]["tags"] + ',' + tag
+        else:
+            evaluations[code] = {
+                "evaluated_value": 1,
+                "tags": tag
+            }
     evaluation_data = [
         (code, format_datetime_str(search_date), evaluation["evaluated_value"], evaluation["tags"])
         for code, evaluation in evaluations.items()
@@ -197,10 +190,22 @@ def evaluate(conn, search_date):
 def scrape_in_day():
     start_date_index = 1 if is_trading_hours() else 2
     scrape_in_days(start_date_index, start_date_index + 1)
+    
+def tag_title_on_disclosure(conn):
+    timely_disclosure_table = db.fetch_timely_disclosure(conn,
+        condition_line="tag IS NULL", params=[])
+    
+    rows = []
+    for date, time, code, title, tag in timely_disclosure_table:
+        for search_condition in config["disclosure"]['watch_pdf_tags']:
+            found_keywords_in_title = search_condition['condition'](title)
+            if found_keywords_in_title:
+                tag = search_condition['tag']
+                rows.append([tag, date, time, code, title])
+                break
+    db.update_tag_on_disclosure_table(conn, rows)
 
-def scrape():
-    conn = db.create_database()
-
+def scrape(conn):
     skip_scraping = config['scraping']['skip_scraping']
     if not skip_scraping:
         is_on_day = config['scraping']['is_on_day']
@@ -210,23 +215,23 @@ def scrape():
             start_date_index = config['scraping']['start_date_index']
             scrape_in_days(conn, start_date_index = start_date_index)
 
-    # タイトルからキーワードを検索してカウント
-    #current_datetime = get_datetime_now()
-    #yesterday_datetime = current_datetime - timedelta(days=1)
-    #target_datetime = current_datetime if is_trading_hours() else yesterday_datetime
-    
+    tag_title_on_disclosure(conn)
+
+
+def evaluate_simply(conn):
     end_date = config['evaluate']['end_date']
     days = config['evaluate']['days_before_end_date']
     for i in range(1, days):
         evaluate_date = end_date - timedelta(days=i)
-        evaluate(conn, evaluate_date)
+        count_rise_tags(conn, evaluate_date)
 
     top_evaluations = db.fetch_top_evaluations(conn, config['evaluate']['top_evaluations_limit'])
     for evaluation in top_evaluations:
         print(evaluation)
 
-    conn.close()
-
 
 if __name__ == "__main__":
-    scrape()
+    conn = db.create_database()
+    scrape(conn)
+    evaluate_simply(conn)
+    conn.close()
