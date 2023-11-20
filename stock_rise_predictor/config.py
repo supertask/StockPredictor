@@ -8,14 +8,61 @@ def get_datetime_now():
 today = get_datetime_now()
 yesterday = today - timedelta(days=1)
 
+_analyze_tags = [
+	{
+		{
+			"tag": "決算短信",
+			"condition": lambda title: "決算" in title and "短信 ",
+			"path": "input/kessan_tanshin_pdf_prompt.txt"
+		},
+	}
+]
+
+_rise_tags = [
+	{
+		# ((A, B), (C)) => (A & B) or C
+		"tag": "配当",
+		"condition": lambda title:  ("配当" in title and "修正" in title) or ("増配" in title),
+		"path": "input/dividend_pdf_prompt.txt"
+	},
+	{
+		"tag": "株式分割",
+		"condition": lambda title:  "株式" in title and "分割" in title,
+		"path": "input/stock_splits_pdf_prompt.txt"
+	},
+	{
+		"tag": "自己株式取得",
+		"condition": lambda title: ("自己株式" in title) and ("取得" in title),
+		"path": "input/buy_my_stock_pdf_prompt.txt"
+	},
+	{
+		"tag": "上方修正",
+		"condition": lambda title: ("上方" in title) and ("修正" in title),
+		"path": "input/upward_revision_pdf_prompt.txt"
+	},
+	{
+		"tag": "業績予想の修正",
+		"condition": lambda title: ("業績予想" in title) and ("修正" in title) and (not "下方" in title),
+		"path": "input/earning_revision_pdf_prompt.txt"
+	},
+]
+
+_analyze_tags += _rise_tags
+
+
 config = {
 	"scraping":{
 		"skip_scraping": True,
-		"is_on_day": True,
-		"start_date_index": 4
+		"is_on_day": False,
+		"start_date_index": 1
 	},
 	"evaluate": {
 		"end_date": today,
-		"days_before_end_date": 10
-	}
+		"days_before_end_date": 30, #評価をする日数
+		"top_evaluations_limit": 5, #トップのN社を列挙する
+	},
+	"disclosure" : {
+		"analyze_tags": _analyze_tags,
+		"rise_tags": _rise_tags,
+	},
 }

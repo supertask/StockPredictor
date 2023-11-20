@@ -20,7 +20,7 @@ def create_database():
     # title: 開示情報のタイトル,
     # FOREIGN KEY(code): 外部キーとしてCompanyテーブルのcodeを参照
     cur.execute('''CREATE TABLE IF NOT EXISTS TimelyDisclosure
-                    (date TEXT, time TEXT, code TEXT, title TEXT,
+                    (date TEXT, time TEXT, code TEXT, title TEXT, url TEXT,
                     FOREIGN KEY(code) REFERENCES Company(code))''')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_code_date ON TimelyDisclosure (code, date)')
 
@@ -29,7 +29,7 @@ def create_database():
     # date: 評価日
     # evaluation: 評価値
     # FOREIGN KEY(code): 外部キーとしてCompanyテーブルのcodeを参照
-    cur.execute('DROP TABLE UpwardEvaluation')
+    cur.execute('DROP TABLE IF EXISTS UpwardEvaluation')
     cur.execute('''CREATE TABLE IF NOT EXISTS UpwardEvaluation
                     (code TEXT, date TEXT, evaluation INTEGER, tags TEXT,
                     FOREIGN KEY(code) REFERENCES Company(code))''')
@@ -45,7 +45,7 @@ def insert_data(conn, table, data):
             # 各レコードに対して、重複チェックを行います
             cur.execute('SELECT * FROM TimelyDisclosure WHERE date=? AND time=? AND code=? AND title=?', record[:4])
             if not cur.fetchone():
-                cur.execute('INSERT INTO TimelyDisclosure (date, time, code, title) VALUES (?, ?, ?, ?)', record) # 重複がない場合のみ挿入
+                cur.execute('INSERT INTO TimelyDisclosure (date, time, code, title, url) VALUES (?, ?, ?, ?, ?)', record) # 重複がない場合のみ挿入
         #cur.executemany('INSERT INTO TimelyDisclosure (date, time, code, title) VALUES (?, ?, ?, ?)', data)
     elif table == 'UpwardEvaluation':
         cur.executemany('INSERT INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
@@ -66,15 +66,15 @@ def fetch_timely_disclosure(conn, search_date):
     cur.execute(query, params)
     return cur.fetchall()
     
-def fetch_top_evaluations(conn):
+def fetch_top_evaluations(conn, top_evaluations_limit):
     cur = conn.cursor()
-    query = '''
+    query = f'''
     SELECT date, code, evaluation
     FROM (
         SELECT date, code, evaluation,
             ROW_NUMBER() OVER (PARTITION BY date ORDER BY evaluation DESC) AS rn
         FROM UpwardEvaluation
-    ) WHERE rn <= 10
+    ) WHERE rn <= {top_evaluations_limit}
     ORDER BY date, rn;
     '''
     cur.execute(query)

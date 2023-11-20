@@ -33,31 +33,6 @@ from config import config
 #「受注」
 #「月次情報」
 
-search_conditions = [
-    {
-        # ((A, B), (C)) => (A & B) or C
-        "condition": lambda title:  ("配当" in title and "修正" in title) or "増配" in title,
-        "tag": "配当"
-    },
-    {
-        "condition": lambda title:  "株式" in title and "分割" in title,
-        "tag": "株式分割"
-    },
-    {
-        "condition": lambda title: "自己株式取得" in title,
-        "tag": "自己株式取得"
-    },
-    {
-        "condition": lambda title: "上方修正" in title,
-        "tag": "株式分割"
-    },
-    {
-        "condition": lambda title:  "業績予想" in title and "修正" in title,
-        "tag": "業績予想の修正"
-    },
-]
-
-# 決算短信
 
 def get_datetime_now():
     jst = pytz.timezone('Asia/Tokyo')
@@ -102,7 +77,7 @@ def get_table_element(driver):
     return table
 
 def get_disclosure_records_in_page(driver, date):
-    # Scrape the table data
+
     table = get_table_element(driver)
     rows = table.find_elements(By.TAG_NAME, "tr")
     timely_disclosure, company = [], []
@@ -112,15 +87,22 @@ def get_disclosure_records_in_page(driver, date):
             time = cols[0].text
             code = cols[1].text
             company_name = cols[2].text
-            title = cols[3].text
+            title_element = cols[3].find_element(By.TAG_NAME, "a")
+            title = title_element.text
+            url = title_element.get_attribute('href')
             company.append([code, company_name])
-            timely_disclosure.append([date, time, code, title])
+            timely_disclosure.append([date, time, code, title, url])
     return company, timely_disclosure
 
 def get_disclosure_records_in_day(driver, date):
     # iframeに移動してデータスクレイピング
     iframe = driver.find_element(By.ID, "main_list")
     driver.switch_to.frame(iframe)
+    
+    kaiji_text_element = driver.find_element(By.ID, "kaiji-text-1")
+    if kaiji_text_element.text == "に開示された情報はありません。":
+        driver.switch_to.default_content() # フレームから元のページに戻る
+        raise Exception("開示された情報がありません。")
     
     company, timely_disclosure = [], []
     c, td = get_disclosure_records_in_page(driver, date)
@@ -139,8 +121,7 @@ def get_disclosure_records_in_day(driver, date):
         except (NoSuchElementException, ElementNotInteractableException):
             break
 
-    # フレームから元のページに戻る
-    driver.switch_to.default_content()
+    driver.switch_to.default_content() # フレームから元のページに戻る
     return company, timely_disclosure
 
 
@@ -156,22 +137,29 @@ def scrape_in_days(conn, start_date_index = None, end_date_index = None):
 
     # 日付オプションの取得
     date_options = driver.find_element(By.ID, "day-selector").find_elements(By.TAG_NAME, "option")
-    if not start_date_index:
-        start_date_index = 1 if is_trading_hours() else 2
+    #tart_date_index = 1
+    #if not start_date_index:
+    #    start_date_index = 1 if is_trading_hours() else 2
     if not end_date_index:
         end_date_index = len(date_options)
 
     for date_index in range(start_date_index, end_date_index):
+        print("date_index: ", date_index)
         date_options = driver.find_element(By.ID, "day-selector").find_elements(By.TAG_NAME, "option")  # ページ再読み込み後に再取得
         selected_date_option = date_options[date_index].text
         date = convert_date(selected_date_option)
-        print(selected_date_option, date)
         
         date_options[date_index].click()
         time.sleep(random.uniform(0.8, 1.0))
 
-        # 日付ごとのデータ処理
-        company, time_disclosue = get_disclosure_records_in_day(driver, date)
+        try:
+            company, time_disclosue = get_disclosure_records_in_day(driver, date) # 日付ごとのデータ処理
+            print(f"Scraping: date = {date}")
+        except Exception as e:
+            print(f"Skipped: date = {date}")
+            continue
+
+
         db.insert_data(conn, "Company", company)
         db.insert_data(conn, "TimelyDisclosure", time_disclosue)
     driver.quit() # ブラウザの終了
@@ -182,12 +170,12 @@ def evaluate(conn, search_date):
 
     evaluations = { }
     for date, _, code, title in timely_disclosure_table:
-        for search_condition in search_conditions:
+        for search_condition in config["disclosure"]['rise_tags']:
 
             found_keywords_in_title = search_condition['condition'](title)
             if found_keywords_in_title:
-                if code == "83160":
-                    print(title, found_keywords_in_title, search_condition['tag'])
+                #if code == "83160":
+                #    print(title, found_keywords_in_title, search_condition['tag'])
 
                 tag = search_condition['tag']
                 if code in evaluations:
@@ -233,7 +221,7 @@ def scrape():
         evaluate_date = end_date - timedelta(days=i)
         evaluate(conn, evaluate_date)
 
-    top_evaluations = db.fetch_top_evaluations(conn)
+    top_evaluations = db.fetch_top_evaluations(conn, config['evaluate']['top_evaluations_limit'])
     for evaluation in top_evaluations:
         print(evaluation)
 

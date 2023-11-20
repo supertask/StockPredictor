@@ -1,7 +1,9 @@
 
 
 
+## 評価関数
 
+株が上がりそうな要素が3つ以上あれば、その企業をOpenAIのキーで探索する
 
 ## 適時開示の過去の情報
 	https://www2.jpx.co.jp/tseHpFront/JJK010010Action.do?Show=Show
@@ -24,3 +26,15 @@
 -「業績予想の修正」
 -「受注」（大型受注, 大口受注は強そう, 訂正は注意）
 -「月次情報」
+
+
+それぞれの項目をAPIで投げるようにする。
+	決算短信 -> in:image -> 
+	配当 -> in:image -> output:json,tableで見れるように
+	自己株式取得 -> in: -> output:comment: サイトから見れるように
+	上方修正 -> 
+	株式分割 -> in
+	業績予想の修正 -> in -> output:json,tableで見れるように
+
+リンクをサイトに送る
+	決算資料

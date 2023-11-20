@@ -2,8 +2,8 @@ import requests
 
 class PushoverClient:
     def __init__(self):
-        self.user_key = self.read_token(".tokens/user_key.txt")
-        self.api_token = self.read_token(".tokens/api_token.txt")
+        self.user_key = self.read_token(".tokens/pushover_user_key.txt")
+        self.api_token = self.read_token(".tokens/pushover_api_key.txt")
 
     def read_token(self, file_path):
         try:
