@@ -88,7 +88,7 @@ def insert_data(conn, table, data):
         cur.executemany('INSERT OR REPLACE INTO TimelyDisclosure (date, time, code, title, url) VALUES (?, ?, ?, ?, ?)', data)
     elif table == 'UpwardEvaluation':
         #cur.executemany('INSERT INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
-        cur.executemany('INSERT OR REPLACE INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
+        cur.executemany('INSERT OR IGNORE INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
     elif table == 'Company':
         cur.executemany('INSERT OR IGNORE INTO Company (code, name) VALUES (?, ?)', data)
     conn.commit()
@@ -120,4 +120,17 @@ def fetch_top_evaluations(conn, top_evaluations_limit):
     ORDER BY date, rn;
     '''
     cur.execute(query)
+    return cur.fetchall()
+
+
+def fetch_evaluated_disclosures(conn, evaluation_threshold, tags):
+    cur = conn.cursor()
+    tags_placeholder = ','.join('?' for _ in tags)  # Create a placeholder string for the SQL query
+    query = f'''
+    SELECT ue.code, ue.date, td.url, td.tag 
+    FROM UpwardEvaluation ue
+    JOIN TimelyDisclosure td ON ue.code = td.code AND ue.date = td.date
+    WHERE ue.evaluation >= ? AND td.tag IN ({tags_placeholder})
+    '''
+    cur.execute(query, (evaluation_threshold, *tags))
     return cur.fetchall()

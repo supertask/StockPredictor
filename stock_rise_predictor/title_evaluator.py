@@ -15,7 +15,7 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 #from selenium.webdriver.support.ui import WebDriverWait
 
 import db
-from config import config
+import config
 
 # TODO:
 # ニュースや適時開示の情報の中に以下のような株価を押し上げる情報があるかをChatGPTに聞くAPIを作る
@@ -164,7 +164,7 @@ def scrape_in_days(conn, start_date_index = None, end_date_index = None):
     driver.quit() # ブラウザの終了
     
 def count_rise_tags(conn, search_date):
-    rise_tags = [tag_info['tag'] for tag_info in config["disclosure"]['rise_stock_tags']]
+    rise_tags = config.setting.get_rise_tags() 
     tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
 
     timely_disclosure_table = db.fetch_timely_disclosure(conn,

@@ -48,7 +48,7 @@ _rise_stock_tags = [
 _watch_pdf_tags += _rise_stock_tags
 
 
-config = {
+setting = {
 	"scraping":{
 		"skip_scraping": True,
 		"is_on_day": False,
@@ -64,3 +64,13 @@ config = {
 		"rise_stock_tags": _rise_stock_tags,
 	},
 }
+
+def get_watch_tags():
+    watch_pdf_tags = setting["disclosure"]["watch_pdf_tags"]
+    tags = [tag_info["tag"] for tag_info in watch_pdf_tags]
+    return tags
+
+def get_rise_tags():
+    rise_tags = setting["disclosure"]["rise_stock_tags"]
+    tags = [tag_info["tag"] for tag_info in rise_tags]
+    return tags
