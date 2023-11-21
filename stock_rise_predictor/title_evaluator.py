@@ -164,7 +164,7 @@ def scrape_in_days(conn, start_date_index = None, end_date_index = None):
     driver.quit() # ブラウザの終了
     
 def count_rise_tags(conn, search_date):
-    rise_tags = config.setting.get_rise_tags() 
+    rise_tags = config.get_rise_tags() 
     tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
 
     timely_disclosure_table = db.fetch_timely_disclosure(conn,
@@ -197,7 +197,7 @@ def tag_title_on_disclosure(conn):
     
     rows = []
     for date, time, code, title, tag in timely_disclosure_table:
-        for search_condition in config["disclosure"]['watch_pdf_tags']:
+        for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
             found_keywords_in_title = search_condition['condition'](title)
             if found_keywords_in_title:
                 tag = search_condition['tag']
@@ -206,26 +206,26 @@ def tag_title_on_disclosure(conn):
     db.update_tag_on_disclosure_table(conn, rows)
 
 def scrape(conn):
-    skip_scraping = config['scraping']['skip_scraping']
+    skip_scraping = config.setting['scraping']['skip_scraping']
     if not skip_scraping:
-        is_on_day = config['scraping']['is_on_day']
+        is_on_day = config.setting['scraping']['is_on_day']
         if is_on_day:
             scrape_in_day(conn)
         else:
-            start_date_index = config['scraping']['start_date_index']
+            start_date_index = config.setting['scraping']['start_date_index']
             scrape_in_days(conn, start_date_index = start_date_index)
 
     tag_title_on_disclosure(conn)
 
 
 def evaluate_simply(conn):
-    end_date = config['evaluate']['end_date']
-    days = config['evaluate']['days_before_end_date']
+    end_date = config.setting['evaluate']['end_date']
+    days = config.setting['evaluate']['days_before_end_date']
     for i in range(1, days):
         evaluate_date = end_date - timedelta(days=i)
         count_rise_tags(conn, evaluate_date)
 
-    top_evaluations = db.fetch_top_evaluations(conn, config['evaluate']['top_evaluations_limit'])
+    top_evaluations = db.fetch_top_evaluations(conn, config.setting['evaluate']['top_evaluations_limit'])
     for evaluation in top_evaluations:
         print(evaluation)
 

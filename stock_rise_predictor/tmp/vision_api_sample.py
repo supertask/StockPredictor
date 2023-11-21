@@ -4,6 +4,7 @@ import requests
 import json
 from openai import OpenAI
 import time
+import base64
 
 class VisionApiSample:
     def __init__(self, pdf_paths):

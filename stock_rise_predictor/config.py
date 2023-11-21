@@ -11,8 +11,9 @@ yesterday = today - timedelta(days=1)
 _watch_pdf_tags = [
 	{
 		"tag": "決算短信",
-		"condition": lambda title: "決算" in title and "短信 ",
-		"path": "input/kessan_tanshin_pdf_prompt.txt"
+		#"condition": lambda title: "決算" in title and "短信 ",
+		"condition": lambda title: ("決算" in title) and ("短信" in title),
+		"prompt_path": "input/kessan_tanshin_pdf_prompt.txt"
 	},
 ]
 
@@ -21,27 +22,27 @@ _rise_stock_tags = [
 		# ((A, B), (C)) => (A & B) or C
 		"tag": "配当",
 		"condition": lambda title:  ("配当" in title and "修正" in title) or ("増配" in title),
-		"path": "input/dividend_pdf_prompt.txt"
+		"prompt_path": "input/dividend_pdf_prompt.txt"
 	},
 	{
 		"tag": "株式分割",
 		"condition": lambda title:  "株式" in title and "分割" in title,
-		"path": "input/stock_splits_pdf_prompt.txt"
+		"prompt_path": "input/stock_splits_pdf_prompt.txt"
 	},
 	{
 		"tag": "自己株式取得",
 		"condition": lambda title: ("自己株式" in title) and ("取得" in title),
-		"path": "input/buy_my_stock_pdf_prompt.txt"
+		"prompt_path": "input/buy_my_stock_pdf_prompt.txt"
 	},
 	{
 		"tag": "上方修正",
 		"condition": lambda title: ("上方" in title) and ("修正" in title),
-		"path": "input/upward_revision_pdf_prompt.txt"
+		"prompt_path": "input/upward_revision_pdf_prompt.txt"
 	},
 	{
 		"tag": "業績予想の修正",
 		"condition": lambda title: ("業績予想" in title) and ("修正" in title) and (not "下方" in title),
-		"path": "input/earning_revision_pdf_prompt.txt"
+		"prompt_path": "input/earning_revision_pdf_prompt.txt"
 	},
 ]
 
@@ -74,3 +75,10 @@ def get_rise_tags():
     rise_tags = setting["disclosure"]["rise_stock_tags"]
     tags = [tag_info["tag"] for tag_info in rise_tags]
     return tags
+
+def get_tag_prompt_path_dict():
+	tag_prompt_dict = {}
+	watch_pdf_tags = setting["disclosure"]["watch_pdf_tags"]
+	for tag_info in watch_pdf_tags:
+		tag_prompt_dict[tag_info["tag"]] = tag_info["prompt_path"]
+	return tag_prompt_dict
