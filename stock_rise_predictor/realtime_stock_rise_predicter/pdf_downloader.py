@@ -5,17 +5,14 @@ import config
 from db_manager import DBManager
 
 class PdfDownloader:
-    _instance = None
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
+        self.output_base_dir = "output/top_disclosure_pdf"  # デフォルトのダウンロードパス
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(PdfDownloader, cls).__new__(cls)
-            cls._instance.init()
-        return cls._instance
-
-    def init(self):
-        self.db_manager = DBManager()
-
+    def set_download_path(self, new_path):
+        """ ダウンロードパスを変更する """
+        self.output_base_dir = new_path
+    
     def download_all_disclosures(self):
         # TODO: あとでfetch_top_disclosuresを修正
         evaluated_disclosures = self.db_manager.fetch_top_disclosures(evaluation_threshold=3, tags=config.get_watch_tags())
@@ -31,7 +28,7 @@ class PdfDownloader:
         """
         tag_pdf_paths = []
         for code, date, url, tag in disclosures:
-            output_dir = f"output/top_disclosure_pdf/{code}_{date.replace('-', '')}"
+            output_dir = os.path.join(self.output_base_dir, f"{code}_{date.replace('-', '')}")
             os.makedirs(output_dir, exist_ok=True)
             filename = tag + "_" + os.path.basename(url)
             self.download_pdf(url, output_dir, filename)

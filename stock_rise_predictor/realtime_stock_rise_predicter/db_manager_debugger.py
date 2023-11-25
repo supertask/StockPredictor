@@ -1,8 +1,9 @@
 from db_manager import DBManager
+import config
 
 class DBManagerDebugger:
-    def __init__(self):
-        self.db_manager = DBManager()
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
 
     def display_tags_for_all_companies_and_dates(self, limit=None):
         # タグがある全ての会社コードと日付の組み合わせを取得（タグの数が多い順）
@@ -48,5 +49,8 @@ class DBManagerDebugger:
         print("---------------------------------------------------")
 
 # 使用例
-debugger = DBManagerDebugger()  # デバッガークラスのインスタンスを作成
+path = config.setting['db']['past']
+#path = config.setting['db']['recent']
+db_manager = DBManager(path)
+debugger = DBManagerDebugger(db_manager)  # デバッガークラスのインスタンスを作成
 debugger.display_tags_for_all_companies_and_dates(limit=20)  # 最大10件のタグを表示

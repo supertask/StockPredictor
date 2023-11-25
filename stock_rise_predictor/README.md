@@ -38,3 +38,13 @@
 
 リンクをサイトに送る
 	決算資料
+	
+	
+## Idea
+
+### 日経平均株価を説明変数とする回帰モデルの作成
+
+	X = sm.add_constant(nikkei_average)  # 定数項（バイアス）を追加
+	model = sm.OLS(stock_prices, X).fit()
+
+https://chat.openai.com/share/72932f83-a77b-4d5f-96bc-699450d5eeea

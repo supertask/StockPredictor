@@ -34,8 +34,8 @@ import config
 #「月次情報」
 
 class TitleEvaluator:
-    def __init__(self):
-        self.db_manager = DBManager()
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
 
     def get_datetime_now(self):
         jst = pytz.timezone('Asia/Tokyo')
@@ -162,8 +162,8 @@ class TitleEvaluator:
                 print(f"Skipped: date = {date}")
                 continue
 
-            self.db_manager.insert_data(DBManager.Table.COMPANY, company)
-            self.db_manager.insert_data(DBManager.Table.TIMELY_DISCLOSURE, time_disclosue)
+            self.db_manager.insert_data(DBManager.Table.Company, company)
+            self.db_manager.insert_data(DBManager.Table.TimelyDisclosure, time_disclosue)
         driver.quit() # ブラウザの終了
 
     def count_rise_tags(self, search_date):
@@ -173,6 +173,9 @@ class TitleEvaluator:
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
             condition_line = f"td.date = ? and tg.tag in ({tag_questions})",
             params = [self.format_datetime_str(search_date)] + rise_tags)
+
+        if len(timely_disclosure_table) > 0:
+            print(timely_disclosure_table)
 
         evaluations = { }
         for date, time, code, title, tag in timely_disclosure_table:
@@ -187,30 +190,15 @@ class TitleEvaluator:
             (code, self.format_datetime_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
             for code, evaluation in evaluations.items()
         ]
-        self.db_manager.insert_data(DBManager.Table.UPWARD_EVALUATION, evaluation_data)
+        self.db_manager.insert_data(DBManager.Table.UpwardEvaluation, evaluation_data)
 
     def scrape_in_day(self):
         start_date_index = 1 if self.is_trading_hours() else 2
         self.scrape_in_days(start_date_index, start_date_index + 1)
-        
-    #def tag_title_on_disclosure(self):
-    #    timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
-    #        condition_line="tag IS NULL", params=[])
-    #    
-    #    rows = []
-    #    for date, time, code, title, tag in timely_disclosure_table:
-    #        for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
-    #            found_keywords_in_title = search_condition['condition'](title)
-    #            if found_keywords_in_title:
-    #                tag = search_condition['tag']
-    #                rows.append([tag, date, time, code, title])
-    #                break
-    #    self.db_manager.update_tag_on_disclosure_table(rows)
 
     def tag_title_on_disclosure(self):
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
             condition_line="tag IS NULL", params=[])
-        
         tag_data = []
         for date, time, code, title, tag in timely_disclosure_table:
             for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
@@ -218,9 +206,7 @@ class TitleEvaluator:
                 if found_keywords_in_title:
                     new_tag = search_condition['tag']
                     tag_data.append([date, time, code, title, new_tag])
-                    break
-        self.db_manager.insert_data(DBManager.Table.TIMELY_DISCLOSURE_TAGS, tag_data)
-
+        self.db_manager.insert_data(DBManager.Table.TimelyDisclosureTags, tag_data)
 
     def scrape(self):
         skip_scraping = config.setting['scraping']['skip_scraping']
@@ -232,22 +218,35 @@ class TitleEvaluator:
                 start_date_index = config.setting['scraping']['start_date_index']
                 self.scrape_in_days(start_date_index = start_date_index)
 
-        self.tag_title_on_disclosure()
+    def evaluate_longly(self):
+        today = self.get_datetime_now()
+        end_date = today - timedelta(days = 3 * 30)
+        start_date = end_date - timedelta(days = 6 * 30)
+        print(start_date, end_date)
+        self.evaluate(start_date, end_date)
 
-
-    def evaluate_simply(self):
+    def evaluate_shortly(self):
         end_date = config.setting['evaluate']['end_date']
         days = config.setting['evaluate']['days_before_end_date']
-        for i in range(1, days):
-            evaluate_date = end_date - timedelta(days=i)
-            self.count_rise_tags(evaluate_date)
+        start_date = end_date - timedelta(days=days)
+        self.evaluate(start_date, end_date)
 
+    def evaluate(self, start_date, end_date):
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = self.format_datetime_str(current_date)
+            print(f"date: {date_str}")
+            self.count_rise_tags(current_date)
+            current_date += timedelta(days=1)
+            
+    def display_top_evaluations(self):
         top_evaluations = self.db_manager.fetch_top_evaluations(config.setting['evaluate']['top_evaluations_limit'])
         for evaluation in top_evaluations:
             print(evaluation)
 
-
 if __name__ == "__main__":
-    evaluator = TitleEvaluator()
+    evaluator = TitleEvaluator(DBManager(config.setting['db']['recent']))
     evaluator.scrape()
-    evaluator.evaluate_simply()
+    evaluator.evaluate_shortly()
+    evaluator.display_top_evaluations()
+

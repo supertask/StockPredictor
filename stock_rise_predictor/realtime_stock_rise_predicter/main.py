@@ -1,13 +1,17 @@
 from title_evaluator import TitleEvaluator
 from pdf_downloader import PdfDownloader
+from db_manager import DBManager
 from financial_disclosure_analyzer import FinancialDisclosureAnalyzer
 
 def main():
-    title_evaluator = TitleEvaluator()
+    db_manager = DBManager(config.setting['db']['recent'])
+    title_evaluator = TitleEvaluator(db_manager)
     title_evaluator.scrape()
-    title_evaluator.evaluate_simply()
+    title_evaluator.tag_title_on_disclosure()
+    title_evaluator.evaluate_shortly()
+    title_evaluator.display_top_evaluations()
 
-    downloader = PdfDownloader()
+    downloader = PdfDownloader(db_manager)
     analyzer = FinancialDisclosureAnalyzer()
     try:
         pdf_paths_tags = downloader.download_top_disclosures()

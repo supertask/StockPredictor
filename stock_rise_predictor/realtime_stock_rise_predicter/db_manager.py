@@ -2,24 +2,24 @@ import sqlite3
 from enum import Enum, auto
 
 class DBManager:
-    
     class Table(Enum):
-        TIMELY_DISCLOSURE = auto()
-        UPWARD_EVALUATION = auto()
-        COMPANY = auto()
-        TIMELY_DISCLOSURE_TAGS = auto()    
+        TimelyDisclosure = auto()
+        UpwardEvaluation = auto()
+        Company = auto()
+        TimelyDisclosureTags = auto()    
 
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DBManager, cls).__new__(cls)
-            cls._instance.init()
-        return cls._instance
-
-    def init(self):
-        self.conn = sqlite3.connect('output/timely_disclosure.db')
+    def __init__(self, db_path):
+        #'output/timely_disclosure.db'
+        self.db_path = db_path
+        self.conn = sqlite3.connect(self.db_path)
         self.create_tables()
+
+    def change_db(self, new_path):
+        """ データベースのパスを変更し、新しいパスで接続を開始する """
+        self.conn.close()  # 現在の接続を閉じる
+        self.db_path = new_path
+        self.conn = sqlite3.connect(self.db_path)  # 新しいパスで接続
+        self.create_tables()  # 必要に応じてテーブルを再作成
 
     def create_tables(self):
         cur = self.conn.cursor()
@@ -114,13 +114,13 @@ class DBManager:
     def insert_data(self, table, data):
         # TimelyDisclosure = 適時開示テーブル, UpwardEvaluation = 上昇評価値, Company = 会社情報
         cur = self.conn.cursor()
-        if table == DBManager.Table.TIMELY_DISCLOSURE:
+        if table == DBManager.Table.TimelyDisclosure:
             cur.executemany('INSERT OR REPLACE INTO TimelyDisclosure (date, time, code, title, url) VALUES (?, ?, ?, ?, ?)', data)
-        elif table == DBManager.Table.UPWARD_EVALUATION:
+        elif table == DBManager.Table.UpwardEvaluation:
             cur.executemany('INSERT OR IGNORE INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
-        elif table == DBManager.Table.COMPANY:
+        elif table == DBManager.Table.Company:
             cur.executemany('INSERT OR IGNORE INTO Company (code, name) VALUES (?, ?)', data)
-        elif table == DBManager.Table.TIMELY_DISCLOSURE_TAGS:
+        elif table == DBManager.Table.TimelyDisclosureTags:
             cur.executemany('INSERT OR IGNORE INTO TimelyDisclosureTags (date, time, code, title, tag) VALUES (?, ?, ?, ?, ?)', data)
         self.conn.commit()
 
@@ -129,14 +129,6 @@ class DBManager:
         cur = self.conn.cursor()
         cur.executemany("UPDATE TimelyDisclosure SET tag = ? WHERE date = ? AND time = ? AND code = ? AND title = ?", data)
         self.conn.commit()
-
-    #def fetch_timely_disclosure(self, condition_line = "", params = []):
-    #    cur = self.conn.cursor()
-    #    query = 'SELECT date, time, code, title, tag FROM TimelyDisclosure'
-    #    if condition_line:
-    #        query += ' WHERE ' + condition_line
-    #    cur.execute(query, params)
-    #    return cur.fetchall()
 
     def fetch_timely_disclosure(self, condition_line = "", params = []):
         cur = self.conn.cursor()
@@ -162,18 +154,6 @@ class DBManager:
         cur.execute(query)
         return cur.fetchall()
 
-    #def fetch_top_disclosures(self, evaluation_threshold, tags):
-    #    cur = self.conn.cursor()
-    #    tags_placeholder = ','.join('?' for _ in tags)  # Create a placeholder string for the SQL query
-    #    query = f'''
-    #    SELECT ue.code, ue.date, td.url, td.tag 
-    #    FROM UpwardEvaluation ue
-    #    JOIN TimelyDisclosure td ON ue.code = td.code AND ue.date = td.date
-    #    WHERE ue.evaluation >= ? AND td.tag IN ({tags_placeholder})
-    #    '''
-    #    cur.execute(query, (evaluation_threshold, *tags))
-    #    return cur.fetchall()
-        
     def fetch_top_disclosures(self, evaluation_threshold, tags):
         cur = self.conn.cursor()
         tags_placeholder = ','.join('?' for _ in tags)  # SQLクエリ用のプレースホルダー文字列を作成
@@ -187,6 +167,33 @@ class DBManager:
         '''
         cur.execute(query, (evaluation_threshold, *tags))
         return cur.fetchall()
+
+    def fetch_company_codes(self):
+        """会社コードの一覧を取得する"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT code, name FROM Company")  # 'Company' テーブルから会社コードを取得
+        return cursor.fetchall()
+
+    def copy_table(self, src_db_path, dst_db_path, table):
+        """ あるデータベースから別のデータベースへテーブルをコピーする """
+        # まず元のデータベースからデータを読み込む
+        self.change_db(src_db_path)
+        src_cursor = self.conn.cursor()
+        table_name = table.name
+        src_cursor.execute(f"SELECT * FROM {table_name}")
+        data = src_cursor.fetchall()
+        src_cursor.close()
+
+        # 次に新しいデータベースにデータを挿入する
+        self.change_db(dst_db_path)
+        self.create_tables()  # 必要なテーブルを確実に作成する
+        dst_cursor = self.conn.cursor()
+
+        self.insert_data(table, data) # データ挿入
+
+        self.conn.commit()
+        dst_cursor.close()
+
 
     def close(self):
         self.conn.close()

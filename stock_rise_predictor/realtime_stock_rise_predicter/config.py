@@ -50,6 +50,10 @@ _watch_pdf_tags += _rise_stock_tags
 
 
 setting = {
+	"db": {
+		"past":  'output/past_timely_disclosure.db',
+		"recent": 'output/timely_disclosure.db'
+	},
 	"scraping":{
 		"skip_scraping": True,
 		"is_on_day": False,
