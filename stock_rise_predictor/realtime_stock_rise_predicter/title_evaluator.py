@@ -162,51 +162,65 @@ class TitleEvaluator:
                 print(f"Skipped: date = {date}")
                 continue
 
-            self.db_manager.insert_data("Company", company)
-            self.db_manager.insert_data("TimelyDisclosure", time_disclosue)
+            self.db_manager.insert_data(DBManager.Table.COMPANY, company)
+            self.db_manager.insert_data(DBManager.Table.TIMELY_DISCLOSURE, time_disclosue)
         driver.quit() # ブラウザの終了
-        
+
     def count_rise_tags(self, search_date):
         rise_tags = config.get_rise_tags() 
         tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
 
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
-            condition_line = f"date = ? and tag in ({tag_questions})",
+            condition_line = f"td.date = ? and tg.tag in ({tag_questions})",
             params = [self.format_datetime_str(search_date)] + rise_tags)
 
         evaluations = { }
         for date, time, code, title, tag in timely_disclosure_table:
             if code in evaluations:
-                evaluations[code]["evaluated_value"] += 1
                 evaluations[code]["tags"].add(tag)  # タグを集合に追加
             else:
                 evaluations[code] = {
-                    "evaluated_value": 1,
                     "tags": {tag}  # 初期値としてタグの集合を作成
                 }
+                
         evaluation_data = [
-            (code, self.format_datetime_str(search_date), evaluation["evaluated_value"], ','.join(evaluation["tags"]))
+            (code, self.format_datetime_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
             for code, evaluation in evaluations.items()
         ]
-        self.db_manager.insert_data("UpwardEvaluation", evaluation_data)
+        self.db_manager.insert_data(DBManager.Table.UPWARD_EVALUATION, evaluation_data)
 
     def scrape_in_day(self):
         start_date_index = 1 if self.is_trading_hours() else 2
         self.scrape_in_days(start_date_index, start_date_index + 1)
         
+    #def tag_title_on_disclosure(self):
+    #    timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
+    #        condition_line="tag IS NULL", params=[])
+    #    
+    #    rows = []
+    #    for date, time, code, title, tag in timely_disclosure_table:
+    #        for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
+    #            found_keywords_in_title = search_condition['condition'](title)
+    #            if found_keywords_in_title:
+    #                tag = search_condition['tag']
+    #                rows.append([tag, date, time, code, title])
+    #                break
+    #    self.db_manager.update_tag_on_disclosure_table(rows)
+
     def tag_title_on_disclosure(self):
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
             condition_line="tag IS NULL", params=[])
         
-        rows = []
+        tag_data = []
         for date, time, code, title, tag in timely_disclosure_table:
             for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
                 found_keywords_in_title = search_condition['condition'](title)
                 if found_keywords_in_title:
-                    tag = search_condition['tag']
-                    rows.append([tag, date, time, code, title])
+                    new_tag = search_condition['tag']
+                    tag_data.append([date, time, code, title, new_tag])
                     break
-        self.db_manager.update_tag_on_disclosure_table(rows)
+        self.db_manager.insert_data(DBManager.Table.TIMELY_DISCLOSURE_TAGS, tag_data)
+
 
     def scrape(self):
         skip_scraping = config.setting['scraping']['skip_scraping']

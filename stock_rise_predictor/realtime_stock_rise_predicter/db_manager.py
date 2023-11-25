@@ -1,6 +1,14 @@
 import sqlite3
+from enum import Enum, auto
 
 class DBManager:
+    
+    class Table(Enum):
+        TIMELY_DISCLOSURE = auto()
+        UPWARD_EVALUATION = auto()
+        COMPANY = auto()
+        TIMELY_DISCLOSURE_TAGS = auto()    
+
     _instance = None
 
     def __new__(cls):
@@ -36,10 +44,26 @@ class DBManager:
                         code TEXT,
                         title TEXT,
                         url TEXT,
-                        tag TEXT,
                         PRIMARY KEY (date, time, code, title),
                         FOREIGN KEY(code) REFERENCES Company(code))''')
         cur.execute('CREATE INDEX IF NOT EXISTS idx_code_date_disclosure ON TimelyDisclosure (date, code)')
+
+        # TimelyDisclosureTags: タグ情報を保存するテーブル
+        # - date, time, code, title: TimelyDisclosureテーブルの各レコードに対応するキー
+        # - tag: タグの内容
+        # - FOREIGN KEY(date, time, code, title): TimelyDisclosureテーブルとの関連付け
+        cur.execute('''CREATE TABLE IF NOT EXISTS TimelyDisclosureTags (
+                date TEXT,
+                time TEXT,
+                code TEXT,
+                title TEXT,
+                tag TEXT,
+                FOREIGN KEY (date, time, code, title) REFERENCES TimelyDisclosure(date, time, code, title)
+            )''')
+
+        # TimelyDisclosureTags テーブルに関するインデックスを作成（必要に応じて）
+        cur.execute('''CREATE INDEX IF NOT EXISTS idx_tags_fk ON TimelyDisclosureTags (date, time, code, title)''') # - TimelyDisclosureテーブルのキーに対するインデックス
+        cur.execute('''CREATE INDEX IF NOT EXISTS idx_tags_tag ON TimelyDisclosureTags (tag)''') # - タグ内容に対するインデックス
 
         # UpwardEvaluation: 各会社の評価情報を保存するテーブル
         # code: 会社コード（Companyテーブルのcodeに対応）
@@ -90,18 +114,14 @@ class DBManager:
     def insert_data(self, table, data):
         # TimelyDisclosure = 適時開示テーブル, UpwardEvaluation = 上昇評価値, Company = 会社情報
         cur = self.conn.cursor()
-        if table == 'TimelyDisclosure':
-            #for record in data:
-            #    # 各レコードに対して、重複チェックを行います
-            #    cur.execute('SELECT * FROM TimelyDisclosure WHERE date=? AND time=? AND code=? AND title=?', record[:4])
-            #    if not cur.fetchone():
-            #        cur.execute('INSERT INTO TimelyDisclosure (date, time, code, title, url) VALUES (?, ?, ?, ?, ?)', record) # 重複がない場合のみ挿入
+        if table == DBManager.Table.TIMELY_DISCLOSURE:
             cur.executemany('INSERT OR REPLACE INTO TimelyDisclosure (date, time, code, title, url) VALUES (?, ?, ?, ?, ?)', data)
-        elif table == 'UpwardEvaluation':
-            #cur.executemany('INSERT INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
+        elif table == DBManager.Table.UPWARD_EVALUATION:
             cur.executemany('INSERT OR IGNORE INTO UpwardEvaluation (code, date, evaluation, tags) VALUES (?, ?, ?, ?)', data)
-        elif table == 'Company':
+        elif table == DBManager.Table.COMPANY:
             cur.executemany('INSERT OR IGNORE INTO Company (code, name) VALUES (?, ?)', data)
+        elif table == DBManager.Table.TIMELY_DISCLOSURE_TAGS:
+            cur.executemany('INSERT OR IGNORE INTO TimelyDisclosureTags (date, time, code, title, tag) VALUES (?, ?, ?, ?, ?)', data)
         self.conn.commit()
 
     def update_tag_on_disclosure_table(self, data):
@@ -110,14 +130,23 @@ class DBManager:
         cur.executemany("UPDATE TimelyDisclosure SET tag = ? WHERE date = ? AND time = ? AND code = ? AND title = ?", data)
         self.conn.commit()
 
+    #def fetch_timely_disclosure(self, condition_line = "", params = []):
+    #    cur = self.conn.cursor()
+    #    query = 'SELECT date, time, code, title, tag FROM TimelyDisclosure'
+    #    if condition_line:
+    #        query += ' WHERE ' + condition_line
+    #    cur.execute(query, params)
+    #    return cur.fetchall()
+
     def fetch_timely_disclosure(self, condition_line = "", params = []):
         cur = self.conn.cursor()
-        query = 'SELECT date, time, code, title, tag FROM TimelyDisclosure'
+        query = '''SELECT td.date, td.time, td.code, td.title, tg.tag FROM TimelyDisclosure td
+                    LEFT JOIN TimelyDisclosureTags tg
+                    ON td.date = tg.date AND td.time = tg.time AND td.code = tg.code AND td.title = tg.title'''
         if condition_line:
             query += ' WHERE ' + condition_line
         cur.execute(query, params)
         return cur.fetchall()
-
 
     def fetch_top_evaluations(self, top_evaluations_limit):
         cur = self.conn.cursor()
@@ -133,15 +162,28 @@ class DBManager:
         cur.execute(query)
         return cur.fetchall()
 
-
+    #def fetch_top_disclosures(self, evaluation_threshold, tags):
+    #    cur = self.conn.cursor()
+    #    tags_placeholder = ','.join('?' for _ in tags)  # Create a placeholder string for the SQL query
+    #    query = f'''
+    #    SELECT ue.code, ue.date, td.url, td.tag 
+    #    FROM UpwardEvaluation ue
+    #    JOIN TimelyDisclosure td ON ue.code = td.code AND ue.date = td.date
+    #    WHERE ue.evaluation >= ? AND td.tag IN ({tags_placeholder})
+    #    '''
+    #    cur.execute(query, (evaluation_threshold, *tags))
+    #    return cur.fetchall()
+        
     def fetch_top_disclosures(self, evaluation_threshold, tags):
         cur = self.conn.cursor()
-        tags_placeholder = ','.join('?' for _ in tags)  # Create a placeholder string for the SQL query
+        tags_placeholder = ','.join('?' for _ in tags)  # SQLクエリ用のプレースホルダー文字列を作成
+
         query = f'''
-        SELECT ue.code, ue.date, td.url, td.tag 
+        SELECT ue.code, ue.date, td.url, tg.tag 
         FROM UpwardEvaluation ue
         JOIN TimelyDisclosure td ON ue.code = td.code AND ue.date = td.date
-        WHERE ue.evaluation >= ? AND td.tag IN ({tags_placeholder})
+        JOIN TimelyDisclosureTags tg ON td.date = tg.date AND td.time = tg.time AND td.code = tg.code AND td.title = tg.title
+        WHERE ue.evaluation >= ? AND tg.tag IN ({tags_placeholder})
         '''
         cur.execute(query, (evaluation_threshold, *tags))
         return cur.fetchall()
