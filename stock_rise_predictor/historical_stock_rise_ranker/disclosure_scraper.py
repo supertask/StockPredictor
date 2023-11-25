@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../realtime_stock_rise_predicter") #mainのモジュール読み込む
+
 import time
 import random
 
@@ -10,6 +13,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 #from selenium.webdriver.support.ui import WebDriverWait
 
+from db_manager import DBManager
+
 class DisclosureScraper:
     def __init__(self):
         # ブラウザの設定
@@ -17,6 +22,7 @@ class DisclosureScraper:
         chrome_options.page_load_strategy = 'eager'
         self.driver = webdriver.Chrome(options=chrome_options)
         self.wait = WebDriverWait(self.driver, 10)
+        self.db_manager = DBManager()
 
     def scrape_disclosure_history(self, company_code):
         try:
@@ -63,23 +69,20 @@ class DisclosureScraper:
 
             rows = disclosure_table.find_elements(By.TAG_NAME, "tr")
 
+            self.driver.quit()
+
             # Check if there are enough rows
             if len(rows) < 3:
                 print("No disclosure information available.")
                 return
 			
-            data = []
+            table_rows = []
             for row in rows[2:]:  # Skipping header rows
                 cols = row.find_elements(By.TAG_NAME, "td")
                 
                 # Ensure each row has the expected number of columns
                 if len(cols) < 4:
                     continue
-
-                # Debugging: print the text of each column
-                #for col in cols:
-                #    print(col.text)
-
                 link_element = cols[1].find_element(By.TAG_NAME, "a")
 
                 date = cols[0].text.strip()
@@ -88,15 +91,10 @@ class DisclosureScraper:
 
                 # Format data for insertion
                 record = [date, '00:00', company_code, title, url]
-                data.append(record)
-                print(record)
-
-            # Insert data into the database
-            # Here you would need to have an existing connection to your SQLite database
-            #insert_data(your_connection, 'TimelyDisclosure', data)			
-
-
-            # ここで必要な情報を取得する処理を追加
+                table_rows.append(record)
+                #print(record)
+            
+            return table_rows
 
         except NoSuchElementException as e:
             print(f"エレメントが見つかりません: {e}")
@@ -105,10 +103,15 @@ class DisclosureScraper:
         except Exception as e:
             print(f"エラーが発生しました: {e}")
 
+    def scrape_and_save(self):
+        company_code = "8316"
+        table_rows = self.scrape_disclosure_history(company_code)
+        #insert_data(your_connection, 'TimelyDisclosure', data)			
+
+
     def close(self):
-        self.driver.quit()
+        self.db_manager.close()
 
-
-getter = DisclosureScraper()
-getter.scrape_disclosure_history('8316')
-getter.close()
+if __name__ == "__main__":
+    scraper = DisclosureScraper()
+    scraper.scrape_disclosure_history('8316')

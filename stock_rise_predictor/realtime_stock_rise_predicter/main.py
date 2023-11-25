@@ -1,17 +1,16 @@
-import db
-import title_evaluator as title_evaluator
+from title_evaluator import TitleEvaluator
 from pdf_downloader import PdfDownloader
 from financial_disclosure_analyzer import FinancialDisclosureAnalyzer
 
 def main():
-    conn = db.create_database()
-    title_evaluator.scrape(conn)
-    title_evaluator.evaluate_simply(conn)
+    title_evaluator = TitleEvaluator()
+    title_evaluator.scrape()
+    title_evaluator.evaluate_simply()
 
     downloader = PdfDownloader()
     analyzer = FinancialDisclosureAnalyzer()
     try:
-        pdf_paths_tags = downloader.download_disclosures()
+        pdf_paths_tags = downloader.download_top_disclosures()
         analyzer.set_paths(pdf_paths_tags)
         analyzer.analyze()
     finally:

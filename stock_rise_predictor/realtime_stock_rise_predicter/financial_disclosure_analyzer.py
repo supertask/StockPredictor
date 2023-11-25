@@ -118,11 +118,6 @@ class FinancialDisclosureAnalyzer:
 
     def analyze_pdfs(self):
         for index, pdf_tag_path in enumerate(self.pdf_paths_and_tags):
-            
-            # DEBUG!!!!!!!!!!!!!!!!!!!!!
-            #if index > 5:
-            #    break
-
             pdf_path, tag = pdf_tag_path
             print(pdf_path, tag)
             

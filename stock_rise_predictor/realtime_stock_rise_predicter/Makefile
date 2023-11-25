@@ -3,4 +3,4 @@ install:
 test:
 	python3 title_evaluator.py
 db:
-	sqlite3 output/timely_disclosure.db
+	sqlite3 output/timely_disclosure.db_manager

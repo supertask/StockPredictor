@@ -4,8 +4,6 @@ import numpy as np
 from scipy.signal import argrelextrema
 
 
-
-
 def identify_sharp_rise_points(df, short_window=5, long_window=25, volume_increase_factor=2):
     # 短期移動平均と長期移動平均を計算
     df['short_mavg'] = df['Close'].rolling(window=short_window, min_periods=1).mean()
