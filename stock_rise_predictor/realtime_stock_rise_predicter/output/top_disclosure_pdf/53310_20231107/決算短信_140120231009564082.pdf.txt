@@ -1,0 +1,30 @@
+table(focus to see on this):
+|None|None|None|
+|None|None|None|
+
+===
+sentence(this includes table text. but that can be noise. be careful):
+
+===
+命令：上記の適時開示を読み、下のjsonの<>の箇所を適切に埋めて（ない場合はnull）. 返答はjson形式でその他の文章は不要
+==={
+  "売上高": {
+    "今期": <float>,
+    "今期での対前年増減率(%)": <float>,
+    "前期": <float>,
+    "前期での対前年増減率(%)": <float>
+  },
+  "営業利益": {
+    "今期": <float>,
+    "今期での対前年増減率(%)": <float>,
+    "前期": <float>,
+    "前期での対前年増減率(%)": <float>
+  },
+  "経常利益": {
+    "今期": <float>,
+    "今期での対前年増減率(%)": <float>,
+    "前期": <float>,
+    "前期での対前年増減率(%)": <float>
+  },
+  "分析コメント": "<株価がどの程度上がるかの予測、注目点を端的に説明して。300字程度で>"
+}
