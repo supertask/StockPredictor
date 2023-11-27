@@ -41,7 +41,7 @@ class TitleEvaluator:
         jst = pytz.timezone('Asia/Tokyo')
         return datetime.now(jst)
         
-    def format_datetime_str(self, datetime_now):
+    def format_date_str(self, datetime_now):
         return datetime_now.strftime('%Y-%m-%d')
         
     def convert_date(self, selected_date_option):
@@ -166,15 +166,20 @@ class TitleEvaluator:
             self.db_manager.insert_data(DBManager.Table.TimelyDisclosure, time_disclosue)
         driver.quit() # ブラウザの終了
 
-    def count_rise_tags(self, search_date):
-        rise_tags = config.get_rise_tags() 
-        tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
-        timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
-            condition_line = f"td.date = ? and tg.tag in ({tag_questions})",
-            params = [self.format_datetime_str(search_date)] + rise_tags)
+    def count_rise_tags(self, search_date, insert_only_rise_tag=True):
+        
+        search_date_str = self.format_date_str(search_date)
+        if insert_only_rise_tag:
+            rise_tags = config.get_rise_tags() 
+            tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
+            timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
+                condition_line = f"td.date = ? and tg.tag in ({tag_questions})",
+                params = [search_date_str] + rise_tags)
+        else:
+            timely_disclosure_table = self.db_manager.fetch_timely_disclosure(condition_line = f"td.date = ?", params = [search_date_str])
 
-        if len(timely_disclosure_table) > 0:
-            print(timely_disclosure_table)
+        #if len(timely_disclosure_table) > 0:
+        #    print(timely_disclosure_table)
 
         evaluations = { }
         for date, time, code, title, rise_tag in timely_disclosure_table:
@@ -190,7 +195,7 @@ class TitleEvaluator:
                 # 株上昇タグのない銘柄の場合、タグは収取せず、キーだけ入れておく（あとで日付を元に株価の上昇率を計算するため）
                 evaluations[code] = { "tags": {} }
         evaluation_data = [
-            (code, self.format_datetime_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
+            (code, self.format_date_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
             for code, evaluation in evaluations.items()
         ]
         self.db_manager.insert_data(DBManager.Table.UpwardEvaluation, evaluation_data)
@@ -221,27 +226,31 @@ class TitleEvaluator:
                 start_date_index = config.setting['scraping']['start_date_index']
                 self.scrape_in_days(start_date_index = start_date_index)
 
-    def evaluate_longly(self):
+    def evaluate_historical_rise_tags(self):
+        """ 現在の適時開示の株上昇タグをカウント（評価値）、タグ付けし、評価する.
+            また、株上昇タグ以外の適時開示レコードも保存しておく
+        """
         today = self.get_datetime_now()
         end_date = today - timedelta(days = 3 * 30)
         start_date = end_date - timedelta(days = 6 * 30)
-        print(start_date, end_date)
-        self.evaluate(start_date, end_date)
+        #print(start_date, end_date)
+        current_date = start_date
+        while current_date <= end_date:
+            self.count_rise_tags(current_date, insert_only_rise_tag=False)
+            current_date += timedelta(days=1)
 
-    def evaluate_shortly(self):
+    def evaluate_rise_tags(self):
+        """ 現在の適時開示の株上昇タグをカウント（評価値）、タグ付けし、評価する
+        """
         end_date = config.setting['evaluate']['end_date']
         days = config.setting['evaluate']['days_before_end_date']
         start_date = end_date - timedelta(days=days)
-        self.evaluate(start_date, end_date)
-
-    def evaluate(self, start_date, end_date):
+        #print(start_date, end_date)
         current_date = start_date
         while current_date <= end_date:
-            #date_str = self.format_datetime_str(current_date)
-            #print(f"date: {date_str}")
             self.count_rise_tags(current_date)
             current_date += timedelta(days=1)
-            
+
     def display_top_evaluations(self):
         top_evaluations = self.db_manager.fetch_top_evaluations(config.setting['evaluate']['top_evaluations_limit'])
         for evaluation in top_evaluations:
@@ -250,6 +259,6 @@ class TitleEvaluator:
 if __name__ == "__main__":
     evaluator = TitleEvaluator(DBManager(config.setting['db']['recent']))
     evaluator.scrape()
-    evaluator.evaluate_shortly()
+    evaluator.evaluate_rise_tags()
     evaluator.display_top_evaluations()
 

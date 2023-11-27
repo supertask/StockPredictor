@@ -8,7 +8,7 @@ def main():
     title_evaluator = TitleEvaluator(db_manager)
     title_evaluator.scrape()
     title_evaluator.tag_title_on_disclosure()
-    title_evaluator.evaluate_shortly()
+    title_evaluator.evaluate_rise_tags()
     title_evaluator.display_top_evaluations()
 
     downloader = PdfDownloader(db_manager)
