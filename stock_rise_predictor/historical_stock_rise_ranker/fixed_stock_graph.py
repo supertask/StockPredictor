@@ -34,20 +34,19 @@ data['Adjusted_Mitsui'] = data['Mitsui'] - beta * data['Nikkei']
 
 # ============================-
 
-# ここで 'starting_price_mitsui' を実際の開始日の株価に置き換えます。
-print(data['Mitsui'].iloc[0])
-print(mitsui['Adj Close'].iloc[0])
+# ここで 'starting_price' を実際の開始日の株価に置き換えます。
+#print(mitsui['Adj Close'].iloc[0])
 starting_price_mitsui = mitsui['Adj Close'].iloc[0]
 starting_price_nikkei = nikkei['Adj Close'].iloc[0] # ここで 'starting_price_nikkei' を日経平均の開始日の実際の株価に置き換えます。
 
 # 累積リターンの計算
 cumulative_returns_mitsui = (1 + data['Mitsui']).cumprod()
-cumulative_returns_adjusted = (1 + data['Adjusted_Mitsui']).cumprod()
+cumulative_returns_adjusted_mitsui = (1 + data['Adjusted_Mitsui']).cumprod()
 cumulative_returns_nikkei = (1 + data['Nikkei']).cumprod() # 日経平均の累積リターンの計算
 
 # 株価への変換
 real_stock_price_mitsui = starting_price_mitsui * cumulative_returns_mitsui
-real_stock_price_adjusted = starting_price_mitsui * cumulative_returns_adjusted
+real_stock_price_adjusted = starting_price_mitsui * cumulative_returns_adjusted_mitsui
 real_stock_price_nikkei = starting_price_nikkei * cumulative_returns_nikkei # 日経平均の実際の株価への変換
 
 # データフレームに追加
@@ -55,21 +54,10 @@ data['Real_Stock_Price_Mitsui'] = real_stock_price_mitsui
 data['Real_Stock_Price_Adjusted'] = real_stock_price_adjusted
 data['Real_Stock_Price_Nikkei'] = real_stock_price_nikkei
 
-# 結果をグラフに表示
-#plt.figure(figsize=(12, 6))
-#plt.plot(data.index, data['Real_Stock_Price_Mitsui'], label='Real Stock Price Mitsui')
-#plt.plot(data.index, data['Real_Stock_Price_Adjusted'], label='Beta Adjusted Real Stock Price Mitsui')
-#plt.plot(data.index, data['Real_Stock_Price_Nikkei'], label='Real Stock Price Nikkei', color='green')
-#plt.title('Real Stock Prices: Original vs Beta Adjusted')
-#plt.xlabel('Date')
-#plt.ylabel('Stock Price (JPY)')
-#plt.legend()
-#plt.show()
 
-#==============
-
-
-
+#
+# ここから表示（補正つき）
+#
 fig, ax1 = plt.subplots(figsize=(12, 6))
 
 # 三井住友銀行の株価用の軸を設定
@@ -92,3 +80,18 @@ plt.title('Comparison of Stock Prices: Mitsui and Nikkei')
 fig.tight_layout()  # グラフが重ならないようにレイアウトを調整
 
 plt.show()
+
+
+#========
+# 表示補正なしのグラフ
+#plt.figure(figsize=(12, 6))
+#plt.plot(data.index, data['Real_Stock_Price_Mitsui'], label='Real Stock Price Mitsui')
+#plt.plot(data.index, data['Real_Stock_Price_Adjusted'], label='Beta Adjusted Real Stock Price Mitsui')
+#plt.plot(data.index, data['Real_Stock_Price_Nikkei'], label='Real Stock Price Nikkei', color='green')
+#plt.title('Real Stock Prices: Original vs Beta Adjusted')
+#plt.xlabel('Date')
+#plt.ylabel('Stock Price (JPY)')
+#plt.legend()
+#plt.show()
+#========
+

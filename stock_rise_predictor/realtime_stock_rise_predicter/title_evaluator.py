@@ -169,7 +169,6 @@ class TitleEvaluator:
     def count_rise_tags(self, search_date):
         rise_tags = config.get_rise_tags() 
         tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
-
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
             condition_line = f"td.date = ? and tg.tag in ({tag_questions})",
             params = [self.format_datetime_str(search_date)] + rise_tags)
@@ -178,14 +177,18 @@ class TitleEvaluator:
             print(timely_disclosure_table)
 
         evaluations = { }
-        for date, time, code, title, tag in timely_disclosure_table:
-            if code in evaluations:
-                evaluations[code]["tags"].add(tag)  # タグを集合に追加
+        for date, time, code, title, rise_tag in timely_disclosure_table:
+            if rise_tag:
+                # 株上昇タグある銘柄の場合、タグを収集する
+                if code in evaluations:
+                    evaluations[code]["tags"].add(rise_tag)  # タグを集合(重複なし)に追加
+                else:
+                    evaluations[code] = {
+                        "tags": {rise_tag}  # 初期値としてタグの集合(重複なし)を作成
+                    }
             else:
-                evaluations[code] = {
-                    "tags": {tag}  # 初期値としてタグの集合を作成
-                }
-                
+                # 株上昇タグのない銘柄の場合、タグは収取せず、キーだけ入れておく（あとで日付を元に株価の上昇率を計算するため）
+                evaluations[code] = { "tags": {} }
         evaluation_data = [
             (code, self.format_datetime_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
             for code, evaluation in evaluations.items()
@@ -234,8 +237,8 @@ class TitleEvaluator:
     def evaluate(self, start_date, end_date):
         current_date = start_date
         while current_date <= end_date:
-            date_str = self.format_datetime_str(current_date)
-            print(f"date: {date_str}")
+            #date_str = self.format_datetime_str(current_date)
+            #print(f"date: {date_str}")
             self.count_rise_tags(current_date)
             current_date += timedelta(days=1)
             
