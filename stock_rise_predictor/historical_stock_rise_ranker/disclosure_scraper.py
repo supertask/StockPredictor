@@ -6,6 +6,7 @@ import os
 import time
 import random
 import traceback
+import re
 from datetime import datetime, timedelta
 
 from selenium import webdriver
@@ -18,7 +19,7 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 #from selenium.webdriver.support.ui import WebDriverWait
 
 from title_evaluator import TitleEvaluator
-from db_manager import DBManager
+from db_manager import DBManager, DBTable
 import config
 
 class DisclosureScraper:
@@ -32,7 +33,7 @@ class DisclosureScraper:
         current_db_path = os.path.join(realtime_module_path, "output/timely_disclosure.db")
         past_db_path = "output/past_timely_disclosure.db"       
         self.db_manager = db_manager
-        self.db_manager.copy_table(current_db_path, past_db_path, DBManager.Table.Company) #会社情報だけ最新の適時開示DBからコピー
+        self.db_manager.copy_company_table(current_db_path, past_db_path) #会社情報だけ最新の適時開示DBからコピー
         self.db_manager.change_db(past_db_path) #過去の適時開示DBに切り替え
 
     def scrape_disclosure_history(self, company_code):
@@ -141,6 +142,14 @@ class DisclosureScraper:
             print(f"エラーが発生しました: {e}")
             traceback.print_exc()
             
+    def convert_date_format_revised(self, date_str):
+        # 正規表現を用いて日付を YYYY/MM/DD 形式から YYYY-MM-DD 形式に変換
+        match = re.match(r'(\d{4})/(\d{1,2})/(\d{1,2})', date_str)
+        if match:
+            year, month, day = match.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        return None
+
 
     def get_table_rows(self, company_code, rows):
         # Check if there are enough rows
@@ -157,7 +166,8 @@ class DisclosureScraper:
                 continue
             link_element = cols[1].find_element(By.TAG_NAME, "a")
 
-            date = cols[0].text.strip()
+            raw_date = cols[0].text.strip()
+            date = self.convert_date_format_revised(raw_date)
             title = link_element.text.strip()
             url = link_element.get_attribute("href").strip()
 
@@ -173,14 +183,16 @@ class DisclosureScraper:
         companies = self.db_manager.fetch_company_codes()
 
         for index, company in enumerate(companies):
-            if index > 0:
-                break
             code, name = company
+            if not (code == '83160' or code == '35630'):
+                continue            
+
             print("Scraping: code = %s, company name = %s" % (code, name) )
             table_rows = self.scrape_disclosure_history(code)
             if table_rows:
                 #print(table_rows)
-                self.db_manager.insert_data(DBManager.Table.TimelyDisclosure, table_rows)
+                #self.db_manager.insert_data(DBTable.TimelyDisclosureAll, table_rows)
+                self.db_manager.insert_into_timely_disclosure(table_rows)
 
 
     def close(self):

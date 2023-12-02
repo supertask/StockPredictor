@@ -4,6 +4,11 @@ from datetime import datetime, timedelta
 def get_datetime_now():
     jst = pytz.timezone('Asia/Tokyo')
     return datetime.now(jst)
+	
+def get_datetime(year, month, day):
+    jst = pytz.timezone('Asia/Tokyo')
+    return datetime(year, month, day,  tzinfo=jst)
+
 
 today = get_datetime_now()
 yesterday = today - timedelta(days=1)
@@ -12,7 +17,7 @@ _watch_pdf_tags = [
 	{
 		"tag": "決算短信",
 		#"condition": lambda title: "決算" in title and "短信 ",
-		"condition": lambda title: ("決算" in title) and ("短信" in title) and (not ("説明" and "資料")),
+		"condition": lambda title: ("決算" in title and "短信" in title) and not ("説明" in title and "資料" in title),
 		"prompt_path": "input/kessan_tanshin_pdf_prompt.txt"
 	},
 ]
@@ -98,3 +103,10 @@ def get_tag_prompt_dict():
 			prompt = common_prompt + rf.read()
 			tag_prompt_dict[tag_info["tag"]] = prompt
 	return tag_prompt_dict
+	
+if __name__ == "__main__":
+	title = "2024年3月期 第2四半期(中間期)決算短信〔日本基準〕(連結)"
+	for search_condition in setting["disclosure"]['watch_pdf_tags']:
+		found_keywords_in_title = search_condition['condition'](title)
+		if found_keywords_in_title:
+			print(title)

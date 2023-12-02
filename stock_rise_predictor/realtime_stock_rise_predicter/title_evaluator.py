@@ -14,7 +14,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 #from selenium.webdriver.support.ui import WebDriverWait
 
-from db_manager import DBManager
+from db_manager import DBManager, DBTable
 import config
 
 # TODO:
@@ -37,9 +37,9 @@ class TitleEvaluator:
     def __init__(self, db_manager):
         self.db_manager = db_manager
 
-    def get_datetime_now(self):
-        jst = pytz.timezone('Asia/Tokyo')
-        return datetime.now(jst)
+    #def get_datetime_now(self):
+    #    jst = pytz.timezone('Asia/Tokyo')
+    #    return datetime.now(jst)
         
     def format_date_str(self, datetime_now):
         return datetime_now.strftime('%Y-%m-%d')
@@ -57,7 +57,7 @@ class TitleEvaluator:
         return date
 
     def is_trading_hours(self):
-        return 9 <= self.get_datetime_now().hour <= 15
+        return 9 <= config.get_datetime_now().hour <= 15
 
     def get_table_element(self, driver):
         try:
@@ -161,14 +161,16 @@ class TitleEvaluator:
             except Exception as e:
                 print(f"Skipped: date = {date}")
                 continue
-
-            self.db_manager.insert_data(DBManager.Table.Company, company)
-            self.db_manager.insert_data(DBManager.Table.TimelyDisclosure, time_disclosue)
+            #self.db_manager.insert_data(DBTable.Company, DBTable.Company.All, company)
+            #self.db_manager.insert_data(DBTable.TimelyDisclosure, DBTable.TimelyDisclosure.All, time_disclosue)
+            self.db_manager.insert_into_company(company)
+            self.db_manager.insert_into_timely_disclosure(time_disclosue)
         driver.quit() # ブラウザの終了
 
     def count_rise_tags(self, search_date, insert_only_rise_tag=True):
         
         search_date_str = self.format_date_str(search_date)
+        evaluations = { }
         if insert_only_rise_tag:
             rise_tags = config.get_rise_tags() 
             tag_questions = ', '.join(['?' for _ in range(len(rise_tags))] )
@@ -178,27 +180,28 @@ class TitleEvaluator:
         else:
             timely_disclosure_table = self.db_manager.fetch_timely_disclosure(condition_line = f"td.date = ?", params = [search_date_str])
 
-        #if len(timely_disclosure_table) > 0:
-        #    print(timely_disclosure_table)
-
-        evaluations = { }
-        for date, time, code, title, rise_tag in timely_disclosure_table:
-            if rise_tag:
+        rise_tags = config.get_rise_tags()
+        for date, time, code, title, tag in timely_disclosure_table:
+            #print(date, time, code, title)
+            if tag in rise_tags:
                 # 株上昇タグある銘柄の場合、タグを収集する
                 if code in evaluations:
-                    evaluations[code]["tags"].add(rise_tag)  # タグを集合(重複なし)に追加
+                    evaluations[code]["rise_tags"].add(tag)  # タグを集合(重複なし)に追加
                 else:
-                    evaluations[code] = {
-                        "tags": {rise_tag}  # 初期値としてタグの集合(重複なし)を作成
-                    }
+                    evaluations[code] = {"rise_tags": set()}
+                    evaluations[code]["rise_tags"].add(tag)  # タグを集合(重複なし)に追加
             else:
-                # 株上昇タグのない銘柄の場合、タグは収取せず、キーだけ入れておく（あとで日付を元に株価の上昇率を計算するため）
-                evaluations[code] = { "tags": {} }
+                if code not in evaluations:
+                    # 株上昇タグのない銘柄の場合、タグは収取せず、キーだけ入れておく（あとで日付を元に株価の上昇率を計算するため）
+                    evaluations[code] = {"rise_tags": set()}
+
         evaluation_data = [
-            (code, self.format_date_str(search_date), len(evaluation["tags"]), ','.join(evaluation["tags"]))
+            (code, self.format_date_str(search_date), len(evaluation["rise_tags"]), ','.join(evaluation["rise_tags"]), False)
             for code, evaluation in evaluations.items()
         ]
-        self.db_manager.insert_data(DBManager.Table.UpwardEvaluation, evaluation_data)
+
+        self.db_manager.insert_tags_into_upward_evaluation(evaluation_data)
+        
 
     def scrape_in_day(self):
         start_date_index = 1 if self.is_trading_hours() else 2
@@ -206,15 +209,17 @@ class TitleEvaluator:
 
     def tag_title_on_disclosure(self):
         timely_disclosure_table = self.db_manager.fetch_timely_disclosure(
-            condition_line="tag IS NULL", params=[])
+            condition_line="tg.tag IS NULL", params=[])
+
         tag_data = []
         for date, time, code, title, tag in timely_disclosure_table:
+            #print(date, time, code, title)
             for search_condition in config.setting["disclosure"]['watch_pdf_tags']:
                 found_keywords_in_title = search_condition['condition'](title)
                 if found_keywords_in_title:
                     new_tag = search_condition['tag']
                     tag_data.append([date, time, code, title, new_tag])
-        self.db_manager.insert_data(DBManager.Table.TimelyDisclosureTags, tag_data)
+        self.db_manager.insert_into_timely_disclosure_tags(tag_data)
 
     def scrape(self):
         skip_scraping = config.setting['scraping']['skip_scraping']
@@ -230,10 +235,9 @@ class TitleEvaluator:
         """ 現在の適時開示の株上昇タグをカウント（評価値）、タグ付けし、評価する.
             また、株上昇タグ以外の適時開示レコードも保存しておく
         """
-        today = self.get_datetime_now()
+        today = config.get_datetime_now()
         end_date = today - timedelta(days = 3 * 30)
-        start_date = end_date - timedelta(days = 6 * 30)
-        #print(start_date, end_date)
+        start_date = config.get_datetime(2013, 9, 1)
         current_date = start_date
         while current_date <= end_date:
             self.count_rise_tags(current_date, insert_only_rise_tag=False)
@@ -252,9 +256,9 @@ class TitleEvaluator:
             current_date += timedelta(days=1)
 
     def display_top_evaluations(self):
-        top_evaluations = self.db_manager.fetch_top_evaluations(config.setting['evaluate']['top_evaluations_limit'])
-        for evaluation in top_evaluations:
-            print(evaluation)
+        rise_tags_counts = self.db_manager.fetch_top_evaluations(config.setting['evaluate']['top_evaluations_limit'])
+        for rise_tags_count in rise_tags_counts:
+            print(rise_tags_count)
 
 if __name__ == "__main__":
     evaluator = TitleEvaluator(DBManager(config.setting['db']['recent']))

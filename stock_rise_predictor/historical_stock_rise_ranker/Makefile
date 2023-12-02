@@ -3,5 +3,5 @@ install:
 test:
 	python3 main.py
 db:
-	sqlite3 output/timely_disclosure.db
+	sqlite3 output/past_timely_disclosure.db
 

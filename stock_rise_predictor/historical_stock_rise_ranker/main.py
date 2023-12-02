@@ -6,22 +6,27 @@ from disclosure_scraper import DisclosureScraper
 from pdf_downloader import PdfDownloader
 from db_manager import DBManager
 from title_evaluator import TitleEvaluator
+from stock_analyzer import StockAnalyzer
 import config
 
 
 def main():
     db_manager = DBManager(config.setting['db']['past'])
-    scraper = DisclosureScraper(db_manager)
-    
+
     # TODO: スクレーピンングしたデータがあっているか確認する & 株価上昇率のやつ問題ないかも知っている銘柄でチェック
-    scraper.scrape_and_save()
-    scraper.close()
+    #scraper = DisclosureScraper(db_manager)
+    #scraper.scrape_and_save()
+    #scraper.close()
 
     title_evaluator = TitleEvaluator(db_manager)
     title_evaluator.tag_title_on_disclosure()
-    title_evaluator.evaluate_historical_rise_tags() #機能してない（dbのfetchがうまくいかない）
-    # TODO: ここで日付を元に上昇率を全ての銘柄で計算し、それを評価テーブルに入れる。
-    # TODO: 上昇率が高い順にChatGPT APIで評価する（利益率の上昇率, 配当の上昇率など, 上昇率の高いタグも見つける）. 
+    title_evaluator.evaluate_historical_rise_tags()
+
+    ## TODO: ここで日付を元に上昇率を全ての銘柄で計算し、それを評価テーブルに入れる。
+    analyzer = StockAnalyzer(db_manager)
+    analyzer.calc_rise_and_fall_rates() #上昇率を全ての銘柄で計算し、それを評価テーブルに入れる
+
+    # TODO: 上昇率が高い順にChatGPT GPTsで（利益率の上昇率, 配当の上昇率など, 上昇率の高いタグも見つける）. 
 
 
     downloader = PdfDownloader(db_manager)
