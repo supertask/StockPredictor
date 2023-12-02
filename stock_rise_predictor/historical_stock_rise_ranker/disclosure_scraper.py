@@ -37,10 +37,11 @@ class DisclosureScraper:
         self.db_manager.change_db(past_db_path) #過去の適時開示DBに切り替え
 
     def scrape_disclosure_history(self, company_code):
-        self.go_to_table_page(company_code)
         
         partial_id = 'closeUpKaiJi'
         elements = self.driver.find_elements(By.XPATH, f"//*[contains(@id, '{partial_id}')]")
+        if not elements:
+            print(f"No elments. company_code = {company_code} ")
         table_pair_ids = self.get_table_pair_ids(elements)
     
         # [決算情報], Table ID 'closeUpKaiJi0_open'
@@ -90,23 +91,19 @@ class DisclosureScraper:
             disclosure_tab = self.wait.until(EC.presence_of_element_located((By.LINK_TEXT, '適時開示情報')))
             disclosure_tab.click()
             time.sleep(random.uniform(0.5, 1))
+            return True 
 
-        except NoSuchElementException as e:
-            print(f"エレメントが見つかりません: {e}")
-            traceback.print_exc()
-        except ElementNotInteractableException as e:
-            print(f"エレメントが操作できません: {e}")
-            traceback.print_exc()
         except Exception as e:
-            print(f"エラーが発生しました: {e}")
+            print(f"ERROR OCCURED: {e}")
             traceback.print_exc()
+            return False
 
     def scrape_table(self, company_code, closed_table_id, opened_table_id):
         """ [決算情報]や[決定事実 / 発生事実]のテーブルの行一覧を取得する
         """
         try:
             body = self.driver.find_element(By.TAG_NAME, 'body')
-            body_html = body.get_attribute('innerHTML')
+            #body_html = body.get_attribute('innerHTML')
 
             time.sleep(random.uniform(1, 1.2))
 
@@ -121,25 +118,29 @@ class DisclosureScraper:
 			
             # [決算情報]の開かれた後のテーブル
             disclosure_table = self.wait.until(EC.presence_of_element_located((By.ID, opened_table_id)))
-            
+        except Exception as e:
+            print(f"ERROR OCCURED: {e}")
+            traceback.print_exc()
+
+        more_info_button_exists = False
+        try:
             # さらに表示ボタンを押す
             more_info_button = disclosure_table.find_element(By.XPATH, ".//input[@type='button'][@value='さらに表示']")
             more_info_button.click()
             time.sleep(random.uniform(1, 2))
-
+            more_info_button_exists = True
             print(f"Finished to click [決算情報]の「さらに表示する」: {company_code}")
+        except Exception as e:
+            print(f"ERROR OCCURED: {e}")
+            traceback.print_exc()
+            more_info_button_exists = False
+
+        try:
             rows = disclosure_table.find_elements(By.TAG_NAME, "tr")
             print(f"Finished to get table([決算情報]) rows: {company_code}")
             return rows
-
-        except NoSuchElementException as e:
-            print(f"エレメントが見つかりません: {e}")
-            traceback.print_exc()
-        except ElementNotInteractableException as e:
-            print(f"エレメントが操作できません: {e}")
-            traceback.print_exc()
         except Exception as e:
-            print(f"エラーが発生しました: {e}")
+            print(f"ERROR OCCURED: {e}")
             traceback.print_exc()
             
     def convert_date_format_revised(self, date_str):
@@ -164,11 +165,14 @@ class DisclosureScraper:
             # Ensure each row has the expected number of columns
             if len(cols) < 4:
                 continue
-            link_element = cols[1].find_element(By.TAG_NAME, "a")
 
             raw_date = cols[0].text.strip()
-            date = self.convert_date_format_revised(raw_date)
+            if raw_date == "-":
+                break
+
+            link_element = cols[1].find_element(By.TAG_NAME, "a")
             title = link_element.text.strip()
+            date = self.convert_date_format_revised(raw_date)
             url = link_element.get_attribute("href").strip()
 
             # Format data for insertion
@@ -184,15 +188,21 @@ class DisclosureScraper:
 
         for index, company in enumerate(companies):
             code, name = company
-            if not (code == '83160' or code == '35630'):
-                continue            
+            if index < 493:
+                continue
+            #if not (code == '83160' or code == '35630'):
+            #    continue            
 
-            print("Scraping: code = %s, company name = %s" % (code, name) )
-            table_rows = self.scrape_disclosure_history(code)
-            if table_rows:
-                #print(table_rows)
-                #self.db_manager.insert_data(DBTable.TimelyDisclosureAll, table_rows)
-                self.db_manager.insert_into_timely_disclosure(table_rows)
+            print("Scraping: index = %s, code = %s, company name = %s" % (index, code, name) )
+            found_results = self.go_to_table_page(code)
+            if found_results:
+                table_rows = self.scrape_disclosure_history(code)
+                if table_rows:
+                    #print(table_rows)
+                    #self.db_manager.insert_data(DBTable.TimelyDisclosureAll, table_rows)
+                    self.db_manager.insert_into_timely_disclosure(table_rows)
+            else:
+                print(f"Skipping the company. code = {code}, name = {name}. Not found on the web.")
 
 
     def close(self):
