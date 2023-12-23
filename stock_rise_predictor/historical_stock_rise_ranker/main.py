@@ -14,9 +14,9 @@ def main():
     db_manager = DBManager(config.setting['db']['past'])
 
     # TODO: スクレーピンングしたデータがあっているか確認する & 株価上昇率のやつ問題ないかも知っている銘柄でチェック
-    scraper = DisclosureScraper(db_manager)
-    scraper.scrape_and_save()
-    scraper.close()
+    #scraper = DisclosureScraper(db_manager)
+    #scraper.scrape_and_save()
+    #scraper.close()
 
     #title_evaluator = TitleEvaluator(db_manager)
     #title_evaluator.tag_title_on_disclosure()

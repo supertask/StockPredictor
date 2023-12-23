@@ -128,7 +128,7 @@ class TitleEvaluator:
         return company, timely_disclosure
 
 
-    def scrape_in_days(self, conn, start_date_index = None, end_date_index = None):
+    def scrape_in_days(self, start_date_index = None, end_date_index = None):
         # Setup WebDriver
         chrome_options = Options()
         chrome_options.page_load_strategy = 'eager'
@@ -163,7 +163,7 @@ class TitleEvaluator:
                 continue
             #self.db_manager.insert_data(DBTable.Company, DBTable.Company.All, company)
             #self.db_manager.insert_data(DBTable.TimelyDisclosure, DBTable.TimelyDisclosure.All, time_disclosue)
-            self.db_manager.insert_into_company(company)
+            self.db_manager.insert_into_company_table(company)
             self.db_manager.insert_into_timely_disclosure(time_disclosue)
         driver.quit() # ブラウザの終了
 

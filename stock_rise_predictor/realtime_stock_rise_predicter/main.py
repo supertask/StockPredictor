@@ -2,6 +2,7 @@ from title_evaluator import TitleEvaluator
 from pdf_downloader import PdfDownloader
 from db_manager import DBManager
 from financial_disclosure_analyzer import FinancialDisclosureAnalyzer
+import config
 
 def main():
     db_manager = DBManager(config.setting['db']['recent'])
