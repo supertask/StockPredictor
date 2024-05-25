@@ -31,8 +31,9 @@ for year in years:
                     company_name = re.split(r'\n|\（|\）', company_info)[0].strip()
                     company_code = re.search(r'（(.*?)）', company_info)
                     company_code = company_code.group(1) if company_code else ''
-                    company_urls = [a['href'] for a in columns[0].find_all('a')]
-                    company_data.append([company_name, company_code, ', '.join(company_urls)])
+                    company_urls = columns[0].find_all('a')
+                    company_url = company_urls[0]['href']
+                    company_data.append([company_name, company_code, company_url])
 
     # TSVファイルにデータを書き込む
     file_name = f'data/companies_{year}.tsv' if year != 2024 else 'data/companies.tsv'

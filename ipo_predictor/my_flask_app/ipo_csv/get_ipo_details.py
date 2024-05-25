@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import csv
 import re
 import json
+import locale
 
 # 元のTSVファイルを読み込む
 input_file = 'data/companies.tsv'
@@ -10,6 +11,16 @@ base_url = 'https://www.ipokiso.com'
 
 # 出力ファイル
 output_file = 'data/companies_detail.tsv'
+
+# ロケールを設定
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+
+# 文字列を数値に変換する関数
+def string_to_float(value):
+    try:
+        return locale.atof(value)
+    except ValueError:
+        return None
 
 def clean_value(value):
     value = value.replace(",", "")
@@ -122,9 +133,9 @@ def extract_company_data(relative_url):
     # 想定時価総額
     market_capital = ''
     for p_tagclean_value in soup.find_all('p'):
-        match = re.search(r'想定時価総額(\d+\.\d+)(億|万)円', p_tag.text)
+        match = re.search(r'想定時価総額([\d,]+\.\d+)億円', p_tag.text)
         if match:
-            market_capital = match.group(1) + match.group(2) + '円'
+            market_capital = string_to_float(match.group(1))
             break
 
 
@@ -148,7 +159,7 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
     
     header = next(reader)
     writer.writerow([
-        '企業名', 'コード', '市場', '想定時価総額', '会社設立', '上場日',
+        '企業名', 'コード', '市場', '想定時価総額（億円）', '会社設立', '上場日',
         '株主名と比率', '企業業績のデータ（5年分）', '事業内容', '管理人からのコメント',
         '会社URL', 'IPO情報URL'
     ])
@@ -172,6 +183,10 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
                 data['company_url'], ipo_info_url,
             ])
 
-        if index > 5: break
+        #if index > 5: break
+
+
+# 売上↗︎, 利益↗︎, 純利益↗︎, 社長株30%↑, 時価200億↓, PER40↓
+
 
 print("データの取得と書き込みが完了しました。")
