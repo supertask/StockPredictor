@@ -1,0 +1,5 @@
+Flask
+flask-restful
+yfinance
+requests
+python-dotenv
