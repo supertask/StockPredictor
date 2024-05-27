@@ -47,9 +47,28 @@ def clean_shareholder_ratio(shareholders):
         shareholder["isCEO"] = "社長" in shareholder["株主名"]
     return shareholders
 
-def is_increasing(trend_data):
-    values = [v for v in trend_data.values() if v is not None]
-    return all(x < y for x, y in zip(values, values[1:]))
+#def is_increasing(trend_data):
+#    values = [v for v in trend_data.values() if v is not None]
+#    return all(x < y for x, y in zip(values, values[1:]))
+
+#
+# tolerance = 0.0 ~ 1.0
+#
+def is_increasing(data, normalized_tolerance = 0.2):
+    prev_value = None
+    
+    for key, value in data.items():
+        if value is None:
+            continue
+        
+        if prev_value is not None:
+            tolerance_value = prev_value * normalized_tolerance
+            if value < prev_value - tolerance_value:
+                return False
+        
+        prev_value = value
+    
+    return True
 
 def extract_company_data(relative_url):
     # フルURLを作成
@@ -95,9 +114,11 @@ def extract_company_data(relative_url):
     shareholders = clean_shareholder_ratio(shareholders)
 
 
+
     # 企業業績のデータ（5年分）
     performance_table_tags = soup.find_all('table', class_='kobetudate04')
     performance_data = []
+    indicators = []
     if len(performance_table_tags) >= 2:
         performance_table = performance_table_tags[1]
         years = [td.text.strip() for td in performance_table.find('tr').find_all('td')[1:]]
@@ -110,14 +131,21 @@ def extract_company_data(relative_url):
                 for i, year in enumerate(years):
                     year = year.replace("\r\n", "")
                     row_data[first_col_header][year] = clean_value(cols[i + 1].text.strip())
-                row_data["右肩あがりか"] = is_increasing(row_data[first_col_header])
-                performance_data.append(row_data)
+                is_rising_steadily = is_increasing(row_data[first_col_header])
+                #row_data["右肩あがりか"] = rising_steadily
 
+                performance_data.append(row_data)
+                if first_col_header == "売上高（百万円）" and is_rising_steadily:
+                    indicators.append("売上↗︎")
+                if first_col_header == "経常利益（百万円）" and is_rising_steadily:
+                    indicators.append("経常利益↗︎")
+                if first_col_header == "当期純利益（百万円）" and is_rising_steadily:
+                    indicators.append("純利益↗︎")
 
     # 事業内容
     business_content = ''
     for p_tag in soup.find_all('p'):
-        match = re.search(r'事業内容は「(.*?)」', p_tag.text)
+        match = re.search(r'事業内容は「(.*?)」で', p_tag.text)
         if match:
             business_content = match.group(1)
             break
@@ -131,13 +159,24 @@ def extract_company_data(relative_url):
             admin_comment = next_p_tag.text.strip()
 
     # 想定時価総額
+    captial_threshold = 250
     market_capital = ''
-    for p_tagclean_value in soup.find_all('p'):
+    for p_tag in soup.find_all('p'):
         match = re.search(r'想定時価総額([\d,]+\.\d+)億円', p_tag.text)
         if match:
-            market_capital = string_to_float(match.group(1))
+            market_capital_value = string_to_float(match.group(1))
+            market_capital = market_capital_value
+
+            if market_capital_value and market_capital_value <= captial_threshold:
+                indicators.append("\n時価%s億↓" % captial_threshold)
             break
 
+    # 株主のCEO比率判定
+    for shareholder in shareholders:
+        if shareholder["isCEO"] and shareholder["比率"] > 10:
+            ceo_stock = "社長株" + str(shareholder["比率"]) + "%"
+            indicators.append("\n" + ceo_stock)
+            break
 
     return {
         "company_name": company_name,
@@ -148,8 +187,10 @@ def extract_company_data(relative_url):
         "shareholders": json.dumps(shareholders, ensure_ascii=False),
         "performance_data": json.dumps(performance_data, ensure_ascii=False),
         "business_content": business_content,
-        "admin_comment": admin_comment
+        "admin_comment": admin_comment,
+        "ten_bagger_indicators": "".join(indicators)
     }
+
 
 
 # TSVファイルにデータを書き込む
@@ -159,10 +200,12 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
     
     header = next(reader)
     writer.writerow([
-        '企業名', 'コード', '市場', '想定時価総額（億円）', '会社設立', '上場日',
-        '株主名と比率', '企業業績のデータ（5年分）', '事業内容', '管理人からのコメント',
-        '会社URL', 'IPO情報URL'
+        '買', '企業名', 'コード', 'テンバガー指標', 'PER', '決算',
+        'IPO情報URL', '事業計画PDF', '事業内容',
+        '想定時価総額（億円）', '業種1', '業種2', '会社設立', '上場日','市場', '株主名と比率',
+        '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
     ])
+    
 
     market_name_re = r'【([^】]+)】'
 
@@ -176,17 +219,23 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
             market_name = match_market_name.group(1) if match_market_name else ""
 
             company_name, code, ipo_info_url = row
+            full_ipo_info_url = f'{base_url}{ipo_info_url}'
 
+            #writer.writerow([
+            #    '買', '企業名', 'コード', 'テンバガー指標', 'PER = 株価\n/ 一株の純利益', '決算',
+            #    'IPO情報URL','事業内容', '想定時価総額（億円）', '業種1', '業種2',
+            #    '会社設立', '上場日','市場', '株主名と比率',
+            #    '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
+            #])
             writer.writerow([
-                company_name, code, market_name, data['market_capital'], data['company_establishment'], data['listing_date'],
-                data['shareholders'],data['performance_data'], data['business_content'], data['admin_comment'],
-                data['company_url'], ipo_info_url,
+                "", company_name, code, data['ten_bagger_indicators'], "", "",
+                full_ipo_info_url, "", data['business_content'],
+                data['market_capital'], "", "", data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
+                data['performance_data'], data['admin_comment'], data['company_url']
             ])
 
         #if index > 5: break
 
-
-# 売上↗︎, 利益↗︎, 純利益↗︎, 社長株30%↑, 時価200億↓, PER40↓
-
+# 売上↗︎, 利益↗︎, 純利益↗︎, 社長株30%↑, 時価250億↓, PER40↓
 
 print("データの取得と書き込みが完了しました。")
