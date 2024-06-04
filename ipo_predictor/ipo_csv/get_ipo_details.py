@@ -47,13 +47,6 @@ def clean_shareholder_ratio(shareholders):
         shareholder["isCEO"] = "社長" in shareholder["株主名"]
     return shareholders
 
-#def is_increasing(trend_data):
-#    values = [v for v in trend_data.values() if v is not None]
-#    return all(x < y for x, y in zip(values, values[1:]))
-
-#
-# tolerance = 0.0 ~ 1.0
-#
 def is_increasing(data, normalized_tolerance = 0.2):
     prev_value = None
     
@@ -200,7 +193,7 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
     
     header = next(reader)
     writer.writerow([
-        '買', '企業名', 'コード', 'テンバガー指標', 'PER', '決算',
+        '買', '企業名', 'コード', 'テンバガー指標', 'ノーバガー指標', 'PER', '決算',
         'IPO情報URL', 'IR', '事業内容',
         '想定時価総額（億円）', '業種1', '業種2', '会社設立', '上場日','市場', '株主名と比率',
         '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
@@ -222,7 +215,7 @@ with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', n
             full_ipo_info_url = f'{base_url}{ipo_info_url}'
 
             writer.writerow([
-                "", company_name, code, data['ten_bagger_indicators'], "", "",
+                "", company_name, code, "", "", "", "",
                 full_ipo_info_url, "https://irbank.net/" + code + "/ir", data['business_content'],
                 data['market_capital'], "", "", data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
                 data['performance_data'], data['admin_comment'], data['company_url']
