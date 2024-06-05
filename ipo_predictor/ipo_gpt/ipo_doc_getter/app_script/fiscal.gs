@@ -4,6 +4,77 @@ var CAPITAL_THRESHOLD = 250;  // 時価総額閾値
 var CEO_STOCK_THRESHOLD = 10;  // 社長株比率閾値
 var FINANCE_VALUE_EPSILON = 0.05; //決算の右肩上がりかを判定する際の誤差(0.0 ~ 1.0)
 
+
+//最後の決算を取得
+function getLastValue(data) {
+  var keys = Object.keys(data);
+  keys.sort();
+  return data[keys[keys.length - 1]];
+}
+
+//業績が右肩上がりか
+function countIncreasingYears(data, yearsToCheck, normalizedTolerance) {
+  var keys = Object.keys(data);
+  keys.sort(); // 年月順に並べる
+  
+  var newerYearValue = null;
+  var increasingStreak = 1;  // 連続増加年数
+
+  //未来から過去の決算の順で見る
+  for (var i = keys.length - 1; i >= 0; i--) {
+    var key = keys[i];
+    var yearValue = data[key];
+    
+    if (yearValue == null || yearValue == "") continue;
+    
+    if (newerYearValue != null) {
+      var toleranceValue = newerYearValue * normalizedTolerance;
+      if (yearValue <= newerYearValue + toleranceValue) {
+        increasingStreak++;
+      } else {
+        break;
+      }
+    }
+    
+    newerYearValue = yearValue;
+  }
+  
+  return increasingStreak;
+}
+
+//業績が右肩下がりか
+function countDecreasingYears(data, yearsToCheck, normalizedTolerance) {
+  var keys = Object.keys(data);
+  keys.sort(); // 年月順に並べる
+  
+  var newerYearValue = null;
+  var decreasingStreak = 1;  // 連続減少年数
+
+  //未来から過去の決算の順で見る
+  for (var i = keys.length - 1; i >= 0; i--) {
+    var key = keys[i];
+    var yearValue = data[key];
+    
+    if (yearValue == null || yearValue == "") continue;
+    
+    if (newerYearValue != null) {
+      var toleranceValue = yearValue * normalizedTolerance;
+      if (newerYearValue <= yearValue + toleranceValue) {
+        decreasingStreak++;
+      } else {
+        break;
+      }
+    }
+    
+    newerYearValue = yearValue;
+  }
+  
+  return decreasingStreak;
+}
+
+//
+// テンバガー指標とノーバガー指標の計算
+//
 function calculateTenBaggerIndicators() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var range = sheet.getDataRange();
@@ -94,6 +165,11 @@ function calculateTenBaggerIndicators() {
           if (decreasingYears >= FINANCE_CHECK_YEARS) {
             noBaggerIndicators.push("経常利益" + decreasingYears + "年連続↘︎");
           }
+          // 最後の決算が赤字かどうかをチェック
+          var lastValue = getLastValue(data[key]);
+          if (lastValue < 0) {
+            noBaggerIndicators.push("赤字");
+          }
         }
         if (key == "当期純利益（百万円）") {
           if (increasingYears >= FINANCE_CHECK_YEARS) {
@@ -101,6 +177,11 @@ function calculateTenBaggerIndicators() {
           }
           if (decreasingYears >= FINANCE_CHECK_YEARS) {
             noBaggerIndicators.push("純利益" + decreasingYears + "年連続↘︎");
+          }
+          // 最後の決算が赤字かどうかをチェック
+          var lastValue = getLastValue(data[key]);
+          if (lastValue < 0) {
+            noBaggerIndicators.push("赤字");
           }
         }
       }
@@ -123,64 +204,6 @@ function calculateTenBaggerIndicators() {
   }
   
   Browser.msgBox("テンバガー指標の計算が完了しました。");
-}
-
-function countIncreasingYears(data, yearsToCheck, normalizedTolerance) {
-  var keys = Object.keys(data);
-  keys.sort(); // 年月順に並べる
-  
-  var newerYearValue = null;
-  var increasingStreak = 1;  // 連続増加年数
-
-  //未来から過去の決算の順で見る
-  for (var i = keys.length - 1; i >= 0; i--) {
-    var key = keys[i];
-    var yearValue = data[key];
-    
-    if (yearValue == null || yearValue == "") continue;
-    
-    if (newerYearValue != null) {
-      var toleranceValue = newerYearValue * normalizedTolerance;
-      if (yearValue <= newerYearValue + toleranceValue) {
-        increasingStreak++;
-      } else {
-        break;
-      }
-    }
-    
-    newerYearValue = yearValue;
-  }
-  
-  return increasingStreak;
-}
-
-function countDecreasingYears(data, yearsToCheck, normalizedTolerance) {
-  var keys = Object.keys(data);
-  keys.sort(); // 年月順に並べる
-  
-  var newerYearValue = null;
-  var decreasingStreak = 1;  // 連続減少年数
-
-  //未来から過去の決算の順で見る
-  for (var i = keys.length - 1; i >= 0; i--) {
-    var key = keys[i];
-    var yearValue = data[key];
-    
-    if (yearValue == null || yearValue == "") continue;
-    
-    if (newerYearValue != null) {
-      var toleranceValue = yearValue * normalizedTolerance;
-      if (newerYearValue <= yearValue + toleranceValue) {
-        decreasingStreak++;
-      } else {
-        break;
-      }
-    }
-    
-    newerYearValue = yearValue;
-  }
-  
-  return decreasingStreak;
 }
 
 

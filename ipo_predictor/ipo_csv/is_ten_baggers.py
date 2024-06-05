@@ -1,6 +1,6 @@
 import pandas as pd
 import requests
-import json
+from datetime import datetime
 
 # リフレッシュトークンを使用してIDトークンを取得する関数
 def get_id_token(refresh_token):
@@ -30,46 +30,53 @@ def get_financial_statements(id_token, code):
     statements_df = pd.DataFrame(r.json()['statements'])
     return statements_df
 
-# 10倍株を判定する関数
-def is_ten_bagger(ticker, refresh_token):
+def get_ten_bagger_description(ticker, refresh_token):
     # IDトークンを取得
     id_token = get_id_token(refresh_token)
 
     # 株価データを取得
     price_df = get_stock_prices(id_token, ticker)
     
-    # データが1年以上あるかをチェック
-    if len(price_df) < 252 / 2:  # おおよその取引日数（1年間で約252取引日）
-        return False, "データが半年以上ありません。"
+    close_param = 'AdjustmentClose'
 
-    #close_param = 'AdjustmentClose'
-    close_param = 'Close'
-
-    # 最初の3ヶ月間のデータを取得
-    first_3_months = price_df.iloc[:63]  # 約63取引日（3ヶ月間）
-    # 最初の3ヶ月の最小の株価
-    initial_price = first_3_months[close_param].min()
+    # 約最初の12ヶ月(上場して1年以内)
+    first_year_price_df = price_df.iloc[:min(12 * 20, len(price_df))]
+    min_price_index = first_year_price_df[close_param].idxmin()
+    buy_price = first_year_price_df[close_param].min()
+    buy_date_str = first_year_price_df.loc[min_price_index, 'Date']
     
-    # 最後の3ヶ月間のデータを取得
-    last_3_months = price_df.iloc[-63:]  # 最後の63取引日（3ヶ月間）
+    entire_period_price_df = price_df.iloc[:]  # 全ての期間
+    max_price_index = entire_period_price_df[close_param].idxmax()
+    sell_price = entire_period_price_df[close_param].max()
+    sell_date_str = entire_period_price_df.loc[max_price_index, 'Date']
 
-    # 最後の3ヶ月の最大の株価
-    current_price = last_3_months[close_param].max()
-    
-    # デバッグのためにデータ範囲を表示
-    print(f"データ範囲: {price_df['Date'].iloc[0]} から {price_df['Date'].iloc[-1]} まで")
-    print(f"最初の3ヶ月の最小株価: {initial_price}, 最後の3ヶ月の最大株価: {current_price}")
+    buy_date = datetime.strptime(buy_date_str, '%Y-%m-%d')
+    sell_date = datetime.strptime(sell_date_str, '%Y-%m-%d')
 
-    # 10倍かどうかを判定
-    if current_price >= 10 * initial_price:
-        return True, f"{ticker}は過去全期間で10倍株です。"
+    # 期間を計算
+    delta = sell_date - buy_date
+    years = delta.days // 365
+    months = (delta.days % 365) // 30
+    days = (delta.days % 365) % 30
+
+    n_times = round(sell_price / buy_price, 1)
+
+    ten_bagger_description = f"{years}年{months}ヶ月{days}日で{n_times}倍株\n"
+
+    if sell_price >= 10 * buy_price:
+        pass
     else:
-        return False, f"{ticker}は過去全期間で10倍株ではありません。"
+        pass
+        
+    ten_bagger_description += f"最小: {buy_price}円 on {buy_date_str}\n最大: {sell_price}円 on {sell_date_str}"
+    #ten_bagger_description += f"最初の12ヶ月の最小株価: {buy_price}円 ({buy_date_str}),\n全ての期間での最大株価: {sell_price}円 ({sell_date_str})"
+    return ten_bagger_description
+
 
 #ticker = '7203' #トヨタ
 #ticker = '5588' #ファーストアカウンティング
-ticker = '9166' #GENDA
-refresh_token = "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAifQ.aBM_avBwTaQ77VGi6jR-Q_LYB-pTT5R-hSnHYxUwzkTUypwqGONuJKG7-u7JY8v-SmRFA_A2EsVvWRdk0yflM9V0EXvLPIpwG7qRFF-AM7T_BQx-u7WAj3IgJB6PPejqIz7ePRdcc4rKgKy1kBSivOdsA6f-5BteNsoynp3Pbfw1FedihA4iOvDqIyM9dszjubb5TDpYMpV2Ot-oj5LohLGcssdYfHqffjaUq4HFmoCim35uDvsYL2NTWmIYDB4Z0vRvgCdewshbDAm2K0TYhqWZUwABuu-uuDTw3_xKhd45GCoSDLLFiICrsSLMKLVi_V8sh-TfIvoLTdj20lEjVg.Ec5O_61iJlglXIPD.C9Q49xhBHT_QNrmO55iDwJcC2Zc6sm9ZxmQXxxB2BdefjRwhXi5hUr6qHppc7o8-Gx3c32z-W7oIOmKrafs0aT_OpkGvPwaH4h5NQ8cfxNe8HPHJj8Fkmv5N519ULG7M4u8m4n02-NXNG8Imo2jOd8HW5dJpJ1MFByG-IOHjyuib0Nco96-Pv6zsw89IoCv-QyTye8NmOKGyEfrrb4fHm3EVRLzEzmFcdlXU0aLWttxOU9995c6ywfvELHU1Q3Y8iVQOFcYBECUJdjh9FKgF5Op8XN6J3W4Dy0vqXrTbTg7TkBhacVSDAmLuey845T4P_T14ujyBrUx0qmKyBeQj1kLlSQq_NEaFi9OfePNtrAnF-klCaqSDrDImkGBOp4JyCVddm92GyQtsPlKWhh2UeIUhvZJHUfiMSfWHljTReMWj8FKbLPD8tSfSrkqZxdSzuJlrvYElYkpZM6Pzj_SfFzDw02E24gTrY_Q43-EEmtxEm6F1DW3EwF9d2WjtoL46SbBw0Bq2l7HSFErSpqUfUy-K9EOqv1Qoe1oHNVPFx2VDCXQ4xJftoHsxicCYySqxLmbWGAQeauRnIEbdfxavWLnrnu53xm6p3vdQtIysKCwu7BBibyEl4gnq31NNoiW98Gda4nAyYmcaM1gt5v3sfm-86syU_-Bkm5HpQNtHSmkqsdUftP5cKmdLZ3FQZhhJ0aCOkp48TOS9y0vnuJgGpYj2LPzEX-gUlnZDthV_uUKqkGm4TSixLAY0eRpAAmysig82cGxKCFCrkj-Mdc2fqYFLpFIQ_1nW29vq07DiZRezvRIWqm0Mps4GHowIRpsOG1Qnc3urAYS79H-n61RE2wCuoXtrtOyeUOBGa20g9knR4w6hkxejAqq0ABATpLDMqn567fmUJimFCIFWXl-LhJvIzTn6gZ9jNCrMX3FOCf20lHh1YhW2JoKWTohJV3an5Gjjt_YV48W3rgsNxAEKxzIiHFUYsIRqkic3JyvOdT4i0qe6yA1fmQeUWre1MP5AoIa3NNOnlXbiINvbvDFDZqiQUZ1pFTCkKwuNdAlL49eTN3UKRk43p14Y-PM1s7OA41kK0hsAUl-B7dwqPlNZ2wvxagVG2B9rc4LcIxYIxaVlB8_ZPq1Oj0ULbBoNFTGqCVJr1E46SxPQwYLthEwdxZT3EJmswjn1AKQF5tktgBGp3tXuzI-qt-oF5UR-y7gg-K7LpckmC2dpjbanlA9QagpkAZpS7wQ6_vRkuEG4TmDjmubto8wW5nwObH7oNufZUtJKSOxvv_4KYmnj68CHRJyrWajR9ucqGYFTw0_BtOZ5VMW1s5sNPgtdsdkKjFEIttz073sstQgcNw.flMiM_-YvBOQYsxHX8WCBQ"
-result, message = is_ten_bagger(ticker, refresh_token)
-print(message)
+#ticker = '9166' #GENDA
+ticker = '3496' #アズーム
+refresh_token = "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIiwiYWxnIjoiUlNBLU9BRVAifQ.t_KDmSYrgWo6jJfppD5Y0gxRCeB5QMkgmBM2o_Ys3azs13Fb4iIju-2cU4_0PLEV0Ov-S2KOI57_hVYN35HZnzLFWRvufQ_n1hRrrRKwKShzL0heoMMS11Hlmn1_g8tIIwWLa59_xW-w2t4kSpk27rv8YiWIixeWEb5_VhLcWy13aiMxOD9rChaty2wCU_vt7KrrQyL4iApr3f5ESU5cIhWZdXbCiEbxGuSX8cbvKFTkYOiVZ0FTEI_s5oY1wSmG35AfWJV9JgEjWLkx0ZMPH5ZdQcZRQtMW6oHmBAiEHym5GTrbNiLc03PfsP7XmjV3MKQQUbujQRsOzhV9bLSfzQ.4N7p77HAwBiYCkhj.o8LnVLanx3gTt-YSYZ1rGp4d8-2l-8pnJ-inqM81TkbdZ3IX8-Bw2nulvGut42AwC1YzW5CXltdeQm2gJay_GUJ1cmgV0tRt4sZ0D5xmH8_fMKQ86vth4cqxWXQyJq1fMW1_cJE7ZAzuBaUdyDEGiCho6CNePz_FbzP5JUOcIwadmoSUPV0w6puQXCZDdsbf1jtR2rbwgbERjTxcv1rN8Ul1Yl3r64l1uZrzRWo4Za5IS6pYTb_UB5DV7_pX8KY297XcFtHUt6tnDybyZPl-T8Tv15MsIBpmRvaHVdeVYh6h7yh4aN9Q18bGUoaW0yMNwspmIiWHz9RxaFQXsDFv8vkY-7V7PvoRo5iMVNq1Qpxq9WrXBGcNyo12yp5e9LGzmK2RKi_It1Q9PRbmXkbGjt9bspNDepd6EgpIhTYh_EHUHsm52YD25B818QMup3YktnFdastn8k3Qq8WmlB8ncsLuOS0oy1_DIvZDCsR2rp05HHQ6jGfxNZ5IZsgxMVmvL23eDY99Qim2aEJ0FmFRrQQKaGfXAQlLme-jKN0Jb8kfpQLZjb5yubo9kpe2AQLF7NY8WP5Lxe-4ceI7Ib-DCHygpay4P1zlE7ubLa44uRuVxYFtdnYKzTLwEnQi3qhEnso7Q_hEGJ1rplKeI88Aaa4AhlGc8dP_9yJdwsiZdGpJPB9z5r_3JTftmSAC5IkJe5nxw-xsTaZC2X3Q-7jFYc0_xgPqLlDSGvY0m-fkYk6xN88D1dy2oeSi99PbakvKKBl9PgGcejzLtH_5QQbC63pJQzOV8YKjmUzd2ygzJB9fMiaQSQTVxxlgJtOz-3tebmHtkt861tWh28rR7RkRCYif3Jr5phOR7JEx1SyYVv0mXZk0M2NARQql5NsH0wgcAZBzku27OzpfCyFK-M46hvQ-nWTUKnxo8LBqstJun4Z0v4dxHslcxN9216VP8e6QYFBLtr3dnJqX_9wpkYPcbJXEewt2FoJIUR3tfl3H75fajXLhWEIE8SaFvmuXWpJc80sE69Z05KEbM-1kjQOEs24gVmXTRCX9_CupsGwVobZwKMJ8dG7jnPFt7p-WSx-_tKwO61W-6i2YmYguulLf-h5viOqXHK-YrIoRnu3Mbo-D-PImUH36izA3z8GA5M31dN-iVHYsrQWoVZhlDP2yrNhzbxVrvliN4_oFnHCeXKkHGR25-3zgkqq82jIKosK6UY_46ECydZHeEwenlf4SSWWHSjjzngqZgofm3N5Hr81pqc9Z0bkLWJZqMJHidgBjPl6_893qAF9Wkd2-VStkBbuvdkDQCl66LStErn9W_EBfe5RY9BGfW5nBpKEWBt5Y78oNdxDGIvDv9w.7XQT9Wi6UXyv4JCAAq97iw"
+ten_bagger_description = get_ten_bagger_description(ticker, refresh_token)
 

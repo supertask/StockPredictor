@@ -2,13 +2,16 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 import re
+from datetime import datetime
 
 # 対象とする年のリスト
-years = range(2024, 2019, -1)
+current_year = datetime.now().year
+past_year = 2020
+years = range(past_year, current_year + 1)
 
 for year in years:
     # 年に対応するURLを生成
-    url = f'https://www.ipokiso.com/company/{year}.html' if year != 2024 else 'https://www.ipokiso.com/company/'
+    url = 'https://www.ipokiso.com/company/' if year == current_year else f'https://www.ipokiso.com/company/{year}.html' 
 
     # HTTPリクエストを送信してHTMLを取得
     response = requests.get(url)
@@ -36,7 +39,7 @@ for year in years:
                     company_data.append([company_name, company_code, company_url])
 
     # TSVファイルにデータを書き込む
-    file_name = f'data/companies_{year}.tsv' if year != 2024 else 'data/companies.tsv'
+    file_name = f'data/companies_{year}.tsv'
     with open(file_name, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file, delimiter='\t')
         writer.writerow(['企業名', 'コード', 'URL'])
