@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import os
 import csv
 import re
 import json
@@ -187,6 +188,10 @@ def extract_company_data(relative_url):
 for year in years:
     input_file = f'data/companies_{year}.tsv'
     output_file = f'data/companies_{year}_detail.tsv'
+    
+    if os.path.exists(output_file):
+        print(f"{year}年の出力ファイルが既に存在するため、処理をスキップします。")
+        continue
 
     with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', newline='', encoding='utf-8') as outfile:
         reader = csv.reader(infile, delimiter='\t')
