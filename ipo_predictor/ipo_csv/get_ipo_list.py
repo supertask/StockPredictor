@@ -17,15 +17,19 @@ def get_company_data_from_2018():
         for row in table.find_all('tr'):
             columns = row.find_all('td')
             if len(columns) > 0:
-                company_info = columns[0].text.strip()
+                company_column = columns[0]
+                company_info = company_column.text.strip()
                 #print(company_info)
                 if company_info:  # 企業名が空でない場合のみ処理する
                     company_name = re.split(r'\n|\（|\）', company_info)[0].strip()
                     company_code = re.search(r'[\(（](.*?)[\)）]', company_info)
                     company_code = company_code.group(1) if company_code else ''
-                    company_urls = columns[0].find_all('a')
-                    company_url = company_urls[0]['href']
-                    company_data.append([company_name, company_code, company_url])
+                    company_a_tags = company_column.find_all('a')
+                    if company_a_tags:
+                        company_a_tag = company_a_tags[0]
+                        company_name = company_a_tag.get_text(separator='', strip=True)
+                        company_url = company_a_tag['href']
+                        company_data.append([company_name, company_code, company_url])
     return company_data
 
 def get_company_data_before_2018():
@@ -35,15 +39,24 @@ def get_company_data_before_2018():
         for row in table.find_all('tr'):
             columns = row.find_all('td')
             if len(columns) > 0:
-                company_info = columns[1].text.strip()
+                company_column = columns[1]
+                company_code_column = columns[2]
+                company_info = company_column.text.strip()
                 #print(company_info)
-                if company_info:  # 企業名が空でない場合のみ処理する
-                    company_name = re.split(r'\n|\（|\）', company_info)[0].strip()
-                    company_code = re.search(r'[\(（](.*?)[\)）]', company_info)
-                    company_code = company_code.group(1) if company_code else ''
-                    company_urls = columns[1].find_all('a')
-                    company_url = company_urls[0]['href']
-                    company_data.append([company_name, company_code, company_url])
+                if company_info:
+                    company_code_match = re.search(r'[\(（](.*?)[\)）]', company_info)
+                    if company_code_match:
+                        company_code = company_code_match.group(1) 
+                    else:
+                        company_code = company_code_column.text.strip()
+
+                    company_a_tags = company_column.find_all('a')
+                    if company_a_tags:
+                        company_a_tag = company_a_tags[0]
+                        company_name = company_a_tag.get_text(separator='', strip=True)
+                        company_url = company_a_tag['href']
+                        company_data.append([company_name, company_code, company_url])
+                    
                 #print("company_name, company_code, company_url = %s, %s, %s" % (company_name, company_code, company_url))
     return company_data
 

@@ -196,7 +196,7 @@ def extract_company_data(relative_url):
 
 for year in years:
     # DEBUG: 特定の年をデバッグする用
-    #if year != 2023: continue
+    if year != 2016: continue
 
     input_file = f'output/urls/companies_{year}.tsv'
     output_file = f'output/companies_{year}_detail.tsv'

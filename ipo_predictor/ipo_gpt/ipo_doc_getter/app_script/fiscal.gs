@@ -130,6 +130,8 @@ function calculateTenBaggerIndicators() {
       continue;
     }
 
+    Logger.log(performanceDataJson);
+
     var ceoStockRatio = 0;
     try {
       var shareholdersData = JSON.parse(shareholdersDataJson);
@@ -168,7 +170,7 @@ function calculateTenBaggerIndicators() {
           // 最後の決算が赤字かどうかをチェック
           var lastValue = getLastValue(data[key]);
           if (lastValue < 0) {
-            noBaggerIndicators.push("赤字");
+            noBaggerIndicators.push("経常利益赤字");
           }
         }
         if (key == "当期純利益（百万円）") {
@@ -181,7 +183,7 @@ function calculateTenBaggerIndicators() {
           // 最後の決算が赤字かどうかをチェック
           var lastValue = getLastValue(data[key]);
           if (lastValue < 0) {
-            noBaggerIndicators.push("赤字");
+            noBaggerIndicators.push("純利益赤字");
           }
         }
       }
@@ -203,7 +205,7 @@ function calculateTenBaggerIndicators() {
 
   }
   
-  Browser.msgBox("テンバガー指標の計算が完了しました。");
+  Logger.log("テンバガー指標の計算が完了しました。");
 }
 
 
