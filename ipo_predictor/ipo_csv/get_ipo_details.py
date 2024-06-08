@@ -1,14 +1,17 @@
 import requests
-from bs4 import BeautifulSoup
 import os
 import csv
 import re
 import json
 import locale
 import datetime
+import time
+import random
+from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 current_year = datetime.datetime.now().year
-past_year = 2020
+past_year = 2015
 years = range(past_year, current_year + 1)
 
 
@@ -24,18 +27,11 @@ def string_to_float(value):
 
 def clean_value(value, company_name, relative_url):
     try:
-        value = value.replace(",", "")
-        if value == "-" or value == "(-)" or "（-）":
+        if value == "-" or value == "(-)" or value == "（-）":
             return None
-        elif value.startswith("△"):
-            return -float(value[1:])
-        elif (value.startswith("（") and value.endswith("）")) or (value.startswith("(") and value.endswith(")")):
-            value = value[1:-1]
-            if value.startswith("△"):
-                return -float(value[1:])
-            else:
-                return float(value)
         else:
+            value = value.strip('()（）%％')
+            value = value.replace(",", "").replace('△', '-')
             return float(value)
     except ValueError as e:
         print(f"ValueError for {company_name} at {base_url}{relative_url}: {e}")
@@ -112,26 +108,39 @@ def extract_company_data(relative_url):
     performance_data = []
     indicators = []
     if len(performance_table_tags) >= 2:
-        performance_table = performance_table_tags[1]
+        performance_table = performance_table_tags[-1]
+        #print(performance_table)
+
         years = [td.text.strip() for td in performance_table.find('tr').find_all('td')[1:]]
+
         for row in performance_table.find_all('tr')[1:]:
-            first_col = row.find_all('th')[0]
-            cols = row.find_all('td')
-            if len(cols) > 1:
-                first_col_header = first_col.text.strip()
+            header_columns = row.find_all('th')
+            columns = row.find_all('td')
+            if len(header_columns) == 0:
+                first_column = columns[0]
+                #print("No header_columns: %s, row: %s, URL: %s. " % (first_column, row, url) )
+            else:
+                first_column = header_columns[0]
+            if len(columns) > 1:
+                first_col_header = first_column.text.strip()
                 row_data = {first_col_header: {}}
                 for i, year in enumerate(years):
                     year = year.replace("\r\n", "")
-                    row_data[first_col_header][year] = clean_value(cols[i + 1].text.strip(), company_name, relative_url)
-
-                is_rising_steadily = is_increasing(row_data[first_col_header])
+                    cell = columns[i + 1].text.strip()
+                    cleaned_cell = clean_value(cell, company_name, relative_url)
+                    #print("before: %s, after: %s" % (cell, cleaned_cell))
+                    row_data[first_col_header][year] = cleaned_cell
                 performance_data.append(row_data)
-                if first_col_header == "売上高（百万円）" and is_rising_steadily:
-                    indicators.append("売上↗︎")
-                if first_col_header == "経常利益（百万円）" and is_rising_steadily:
-                    indicators.append("経常利益↗︎")
-                if first_col_header == "当期純利益（百万円）" and is_rising_steadily:
-                    indicators.append("純利益↗︎")
+
+                #is_rising_steadily = is_increasing(row_data[first_col_header])
+                #if first_col_header == "売上高（百万円）" and is_rising_steadily:
+                #    indicators.append("売上↗︎")
+                #if first_col_header == "経常利益（百万円）" and is_rising_steadily:
+                #    indicators.append("経常利益↗︎")
+                #if first_col_header == "当期純利益（百万円）" and is_rising_steadily:
+                #    indicators.append("純利益↗︎")
+
+        #print(performance_data)
 
     business_content = ''
     for p_tag in soup.find_all('p'):
@@ -186,8 +195,11 @@ def extract_company_data(relative_url):
     }
 
 for year in years:
-    input_file = f'data/companies_{year}.tsv'
-    output_file = f'data/companies_{year}_detail.tsv'
+    # DEBUG: 特定の年をデバッグする用
+    #if year != 2023: continue
+
+    input_file = f'output/urls/companies_{year}.tsv'
+    output_file = f'output/companies_{year}_detail.tsv'
     
     if os.path.exists(output_file):
         print(f"{year}年の出力ファイルが既に存在するため、処理をスキップします。")
@@ -199,8 +211,8 @@ for year in years:
         
         header = next(reader)
         writer.writerow([
-            '買', '企業名', 'コード', 'ビジネスモデル', '17業種', '33業種',
-            'テンバガー指標', 'ノーバガー指標', 'PER', '何倍株か', '決算', '決算伸び率%',
+            '買', '企業名', 'コード', 'ビジネスモデル', 'テンバガー指標', 'ノーバガー指標',
+            'PER', '何倍株か', '決算', '決算伸び率%', '17業種', '33業種',
             'IPO情報URL', '有価証券報告書', 'IR', '事業内容',
             '想定時価総額（億円）', '会社設立', '上場日','市場', '株主名と比率',
             '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
@@ -208,7 +220,10 @@ for year in years:
         
         market_name_re = r'【([^】]+)】'
 
-        for index, row in enumerate(reader):
+        rows = list(reader)
+        for index, row in enumerate(tqdm(rows, desc="Processing")):
+        #for index, row in enumerate(reader):
+
             if len(row) == 3:
                 relative_url = row[2]
                 data = extract_company_data(relative_url)
@@ -226,5 +241,8 @@ for year in years:
                     data['market_capital'], data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
                     data['performance_data'], data['admin_comment'], data['company_url']
                 ])
+
+                #time.sleep(random.uniform(0.02, 0.1))
+            
 
     print(f"{year}データの取得と書き込みが完了しました。")
