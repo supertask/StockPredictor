@@ -12,7 +12,7 @@ def get_token_from_file(file_path):
         print(f"Error reading token from file: {e}")
         return None
 
-refresh_token = get_token_from_file("../.token/jquants_refresh_token")
+refresh_token = get_token_from_file("../.tokens/jquants_refresh_token")
 
 
 # リフレッシュトークンを使用してIDトークンを取得する関数
