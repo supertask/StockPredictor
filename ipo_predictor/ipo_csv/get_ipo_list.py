@@ -9,7 +9,6 @@ current_year = datetime.now().year
 past_year = 2015
 years = range(past_year, current_year + 1)
 
-
 def get_company_data_from_2018():
     tables = soup.find_all('table')
     company_data = []
