@@ -5,9 +5,8 @@ import re
 import json
 import locale
 import datetime
-import time
-import random
 import yfinance as yf
+import pandas as pd
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 from requests.exceptions import HTTPError
@@ -88,6 +87,10 @@ industry_dict = {
     "Specialty Chemicals": "特殊化学品"
 }
 
+
+empty_dict = { }
+
+
 def get_token_from_file(file_path):
     try:
         with open(file_path, 'r') as file:
@@ -149,7 +152,9 @@ def is_increasing(data, normalized_tolerance = 0.2):
         prev_value = value
     
     return True
-
+    
+    
+# リフレッシュトークンを使用してIDトークンを取得する関数
 #def get_id_token(refresh_token):
 #    r_post = requests.post(
 #        f"https://api.jquants.com/v1/token/auth_refresh?refreshtoken={refresh_token}"
@@ -157,31 +162,66 @@ def is_increasing(data, normalized_tolerance = 0.2):
 #    id_token = r_post.json()['idToken']
 #    return id_token
 #
-#def get_jquants_company_info(code, id_token):
-#    try:
-#        url = f"https://api.jquants.com/v1/listed/info?code={code}"
-#        headers = {
-#            "Authorization": f"Bearer {id_token}"
-#        }
-#        response = requests.get(url, headers=headers)
-#        response.raise_for_status()
-#        
-#        json_response = response.json()
-#        print(json_response)
-#
-#        info = json_response.get("info", [])
-#        if info and len(info) > 0:
-#            company_info = info[0]
-#            return [company_info.get("Sector17CodeName"), company_info.get("Sector33CodeName")]
-#        else:
-#            return ['None3', 'None3']
+# 株価情報を取得する関数
+#def get_stock_prices(id_token, code):
+#    headers = {'Authorization': 'Bearer {}'.format(id_token)}
+#    r = requests.get(
+#        f"https://api.jquants.com/v1/prices/daily_quotes?code={code}",
+#        headers=headers
+#    )
+#    price_df = pd.DataFrame(r.json()['daily_quotes'])
+#    return price_df
 #    
-#    except requests.exceptions.RequestException as e:
-#        print(f"Error getting company info for code {code}: {e}")
-#        return ['None4', 'None4']
+#def get_min_stock_price(id_token, code):
+#    daily_quotes = get_stock_prices(id_token, code)
+#    if daily_quotes.empty: 
+#        return None
+#
+#    close_param = 'Close'
+#    #close_param = 'AdjustmentClose'
+#    if close_param in daily_quotes.columns:
+#        min_price_row = daily_quotes.loc[daily_quotes[close_param].idxmin()]
+#        min_price = min_price_row[close_param]
+#        #min_price_date = min_price_row['Date']
+#        return min_price
+#    else:
+#        return None
+#        #raise ValueError("'AdjustmentClose' column not found in daily quotes dataframe")
+#
+## 財務データを取得する関数
+#def get_financial_statements(id_token, code):
+#    headers = {'Authorization': 'Bearer {}'.format(id_token)}
+#    r = requests.get(
+#        f"https://api.jquants.com/v1/fins/statements?code={code}",
+#        headers=headers
+#    )
+#    statements_df = pd.DataFrame(r.json()['statements'])
+#    return statements_df
+#
+#def market_cap_in_oku(market_cap):
+#    oku = 10**8
+#    return "{:.2f}".format(market_cap / oku)
+#
+#def estimate_ipo_market_cap(id_token, code):
+#    statements_df = get_financial_statements(id_token, code)
+#    
+#    if statements_df.empty:
+#        return None
+#        #raise ValueError("Financial statements dataframe is empty")
+#
+#    if 'NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock' not in statements_df.columns:
+#        raise ValueError("Column 'NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock' not found in financial statements dataframe")
+#
+#    shares = int(statements_df.iloc[-1]['NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock']) # 株数を取得
+#    
+#    min_price = get_min_stock_price(id_token, code)  # 修正: get_min_stock_priceの戻り値を調整
+#    if not min_price:
+#        return None
+#
+#    return shares * min_price
 
 #
-# セクター、産業、上場しているかを返す
+# セクター、産業、上場廃止しているかを返す
 #
 def get_company_info(code):
     symbol = code + ".T"
@@ -189,14 +229,14 @@ def get_company_info(code):
         ticker = yf.Ticker(symbol)
         ticker_info = ticker.info
         if not ticker_info:
-            return ["None1", "None1", False]
+            return ["None1", "None1", "廃止"]
         hist = ticker.history(period="1d")
         if hist.empty:
             #sector, industry = get_jquants_company_info(code, id_token)
-            return ["上場廃止", "上場廃止", False]
+            return ["", "", "廃止"]
     except Exception as e:
         print(f"Error retrieving data for {symbol}: {e}")
-        return ["None2", "None2", False]
+        return ["None2", "None2", "廃止"]
     
     sector = ticker_info.get('sector', f'{symbol}のセクター情報が見つかりませんでした')
     industry = ticker_info.get('industry', f'{symbol}の業界情報が見つかりませんでした')
@@ -204,9 +244,9 @@ def get_company_info(code):
     sector = sector_dict.get(sector, sector)
     industry = industry_dict.get(industry, industry)
     
-    return [sector, industry, True]
+    return [sector, industry, ""]
 
-def extract_company_data(relative_url):
+def scrape_company_data(relative_url):
     url = f'{base_url}{relative_url}'
     
     response = requests.get(url)
@@ -238,6 +278,10 @@ def extract_company_data(relative_url):
                 ratio = cols[1].text.strip()
                 lockup = cols[2].text.strip()
                 shareholders.append({"株主名": name, "比率": ratio, "ロックアップ": lockup})
+            elif len(cols) >= 2:
+                name = cols[0].text.strip()
+                ratio = cols[1].text.strip()
+                shareholders.append({"株主名": name, "比率": ratio, "ロックアップ": "None"})
 
     shareholders = clean_shareholder_ratio(shareholders, relative_url)
 
@@ -305,9 +349,11 @@ def extract_company_data(relative_url):
                 indicators.append("\n時価%s億↓" % captial_threshold)
             break
 
+    ceo_stock_ratio = ''
     for shareholder in shareholders:
         if shareholder["isCEO"] and shareholder["比率"] > 10:
-            ceo_stock = "社長株" + str(shareholder["比率"]) + "%"
+            ceo_stock_ratio = str(shareholder["比率"])
+            ceo_stock = f"社長株{ceo_stock_ratio}%"
             indicators.append("\n" + ceo_stock)
             break
 
@@ -318,70 +364,96 @@ def extract_company_data(relative_url):
             break
 
     return {
-        "company_name": company_name,
-        "company_url": company_url,
-        "company_establishment": company_establishment,
-        "market_capital": market_capital,
-        "listing_date": listing_date,
-        "shareholders": json.dumps(shareholders, ensure_ascii=False),
-        "performance_data": json.dumps(performance_data, ensure_ascii=False),
-        "business_content": business_content,
-        "admin_comment": admin_comment,
-        "ten_bagger_indicators": "".join(indicators),
-        "securities_report_url": securities_report_url
+        "企業名": company_name, # どの市場かの情報も入っている
+        "会社URL": company_url,
+        "会社設立": company_establishment,
+        "社長株%": ceo_stock_ratio,
+        "想定時価総額（億円）": market_capital,
+        "上場日": listing_date,
+        "株主名と比率": json.dumps(shareholders, ensure_ascii=False),
+        "企業業績のデータ（5年分）": json.dumps(performance_data, ensure_ascii=False),
+        "事業内容": business_content,
+        "管理人からのコメント": admin_comment,
+        "テンバガー指標": "".join(indicators),
+        "有価証券報告書": securities_report_url
     }
 
+def main():
 
-for year in years:
-    # DEBUG: 特定の年をデバッグする用
-    if year != 2015: continue
+    for year in years:
+        # DEBUG: 特定の年をデバッグする用
+        if not year in [2015, 2016]: continue
 
-    input_file = f'output/urls/companies_{year}.tsv'
-    output_file = f'output/companies_{year}_detail.tsv'
-    
-    if os.path.exists(output_file):
-        print(f"{year}年の出力ファイルが既に存在するため、処理をスキップします。")
-        continue
-
-    with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', newline='', encoding='utf-8') as outfile:
-        reader = csv.reader(infile, delimiter='\t')
-        writer = csv.writer(outfile, delimiter='\t')
+        input_file = f'output/urls/companies_{year}.tsv'
+        output_file = f'output/companies_{year}_detail.tsv'
         
-        header = next(reader)
-        writer.writerow([
-            '買', '企業名', 'コード', 'ビジネスモデル', 'テンバガー指標', 'ノーバガー指標',
-            'PER', '何倍株か', 'Sector', 'Industry',
-            'IPO情報URL', 'IR', '事業内容', '上場1年以内での最低時価総額', '有価証券報告書', 
-            '決算', '決算伸び率%', '想定時価総額（億円）', '会社設立', '上場日','市場', '株主名と比率',
-            '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
-        ])
-        
-        market_name_re = r'【([^】]+)】'
-        #id_token = get_id_token(refresh_token)
+        if os.path.exists(output_file):
+            print(f"{year}年の出力ファイルが既に存在するため、処理をスキップします。")
+            continue
 
-        rows = list(reader)
-        for index, row in enumerate(tqdm(rows, desc="Processing")):
-            if len(row) == 3:
-                relative_url = row[2]
-                data = extract_company_data(relative_url)
+        with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w', newline='', encoding='utf-8') as outfile:
+            reader = csv.reader(infile, delimiter='\t')
+            next(reader) # headerをスキップ
 
-                match_market_name = re.search(market_name_re, data['company_name'])
-                market_name = match_market_name.group(1) if match_market_name else ""
-
-                company_name, code, ipo_info_url = row
-                full_ipo_info_url = f'{base_url}{ipo_info_url}'
-                ir_url = "https://irbank.net/" + code + "/ir"
-                sector, industry, is_listed = get_company_info(code)
-
-                writer.writerow([
-                    "", company_name, code, "", "", "",
-                    "", "", sector, industry,
-                    full_ipo_info_url, ir_url, data['business_content'], "", data['securities_report_url'],
-                    "", "", data['market_capital'], data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
-                    data['performance_data'], data['admin_comment'], data['company_url']
-                ])
-
-                #time.sleep(random.uniform(0.02, 0.1))
+            header_row = [
+                "買", "企業名", "最大何倍株", "現在何倍株", "コード", "ビジネスモデル", "参入障壁",
+                "社長株%", "想定時価総額（億円）", "時価総額_上場1年以内（億円）", "ノーバガー指標",
+                "何年で5倍株", "何年で10倍株", "何年で最大N倍株", "Sector", "Industry", "上場廃止", "PER",
+                "IPO情報URL", "IR", "有価証券報告書", "事業内容", "備考",
+                "テンバガー指標", "決算", "決算伸び率%", "会社設立", "管理人からのコメント",
+                "上場日", "市場", "会社URL", "株主名と比率", "企業業績のデータ（5年分）"
+            ]
+            writer = csv.DictWriter(outfile, fieldnames=header_row, delimiter='\t')
+            writer.writeheader()
             
+            market_name_re = r'【([^】]+)】'
 
-    print(f"{year}データの取得と書き込みが完了しました。")
+            rows = list(reader)
+            for index, row in enumerate(tqdm(rows, desc="Processing")):
+                #if index > 10: break #debug
+                
+                if len(row) == 3:
+                    relative_url = row[2]
+
+                    company_name, code, ipo_info_url = row
+                    company_data = scrape_company_data(relative_url)
+                    match_market_name = re.search(market_name_re, company_data['企業名']) # 市場の名前も企業名に入っている
+                    market_name = match_market_name.group(1) if match_market_name else ""
+                    company_data["企業名"] = company_name #読み込んだCSVに書かれた企業名で置き換え
+
+                    full_ipo_info_url = f'{base_url}{ipo_info_url}'
+                    ir_url = "https://irbank.net/" + code + "/ir"
+                    sector, industry, unlisted = get_company_info(code) #yfinanceから業種を取得
+
+                    company_data.update({
+                        "買": '',
+                        "最大何倍株": '',
+                        "現在何倍株": '',
+                        "コード": code,
+                        "ビジネスモデル": '',
+                        "参入障壁": '',
+                        "時価総額_上場1年以内（億円）": '',
+                        "ノーバガー指標": '',
+                        "何年で5倍株": '',
+                        "何年で10倍株": '',
+                        "何年で最大N倍株": '',
+                        "Sector": sector,
+                        "Industry": industry,
+                        "上場廃止": unlisted,
+                        "PER": '',
+                        "IPO情報URL": full_ipo_info_url,
+                        "IR": ir_url,
+                        "備考": '',
+                        "テンバガー指標": '',
+                        "決算": '',
+                        "決算伸び率%": '',
+                        "市場": market_name,
+                    })
+
+                    writer.writerow(company_data)
+                    #time.sleep(random.uniform(0.02, 0.1))
+
+        print(f"{year}データの取得と書き込みが完了しました。")
+
+
+main()
