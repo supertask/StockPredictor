@@ -7,16 +7,97 @@ import locale
 import datetime
 import time
 import random
+import yfinance as yf
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+from requests.exceptions import HTTPError
 
 current_year = datetime.datetime.now().year
 past_year = 2015
 years = range(past_year, current_year + 1)
 
-
 locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 base_url = 'https://www.ipokiso.com'
+
+sector_dict = {
+    "Consumer Defensive": "消費者防衛",
+    "Consumer Cyclical": "消費者循環",
+    "Real Estate": "不動産",
+    "Communication Services": "通信サービス",
+    "Technology": "技術",
+    "Healthcare": "ヘルスケア",
+    "Industrials": "産業",
+    "Financial Services": "金融サービス",
+    "Basic Materials": "基礎材料",
+    "Energy": "エネルギー"
+}
+
+industry_dict = {
+    "Consumer Defensive": "消費者防衛",
+    "Consumer Cyclical": "消費者循環",
+    "Real Estate": "不動産",
+    "Communication Services": "通信サービス",
+    "Technology": "技術",
+    "Healthcare": "ヘルスケア",
+    "Industrials": "産業",
+    "Financial Services": "金融サービス",
+    "Basic Materials": "基礎材料",
+    "Energy": "エネルギー",
+    "Household & Personal Products": "家庭用品・個人用品",
+    "Personal Services": "個人サービス",
+    "Real Estate Services": "不動産サービス",
+    "Entertainment": "娯楽",
+    "Advertising Agencies": "広告代理店",
+    "Electronic Gaming & Multimedia": "電子ゲーム・マルチメディア",
+    "Telecom Services": "電気通信サービス",
+    "Software - Infrastructure": "ソフトウェア - インフラストラクチャ",
+    "Leisure": "レジャー",
+    "Drug Manufacturers - Specialty & Generic": "医薬品メーカー - 専門・ジェネリック",
+    "Internet Content & Information": "インターネットコンテンツ・情報",
+    "Tools & Accessories": "ツール・アクセサリー",
+    "Information Technology Services": "情報技術サービス",
+    "REIT - Hotel & Motel": "REIT - ホテル・モーテル",
+    "Software - Application": "ソフトウェア - アプリケーション",
+    "Specialty Business Services": "専門ビジネスサービス",
+    "Credit Services": "信用サービス",
+    "Banks - Regional": "銀行 - 地域",
+    "Insurance - Life": "保険 - 生命",
+    "Restaurants": "レストラン",
+    "Biotechnology": "バイオテクノロジー",
+    "Publishing": "出版",
+    "Internet Retail": "インターネット小売",
+    "Engineering & Construction": "工学・建設",
+    "Apparel Retail": "衣料品小売",
+    "Building Materials": "建材",
+    "Packaged Foods": "包装食品",
+    "REIT - Residential": "REIT - 住宅",
+    "Oil & Gas Refining & Marketing": "石油・ガス精製・販売",
+    "Medical Instruments & Supplies": "医療機器・用品",
+    "Specialty Industrial Machinery": "特殊産業機械",
+    "Electronic Components": "電子部品",
+    "Staffing & Employment Services": "人材派遣・雇用サービス",
+    "REIT - Diversified": "REIT - 多様化",
+    "Resorts & Casinos": "リゾート・カジノ",
+    "Electronic Components": "電子部品",
+    "Electronics & Computer Distribution": "電子機器・コンピュータ流通",
+    "Residential Construction": "住宅建設",
+    "Semiconductors": "半導体",
+    "REIT - Healthcare Facilities": "REIT - 医療施設",
+    "Farm Products": "農産物",
+    "Asset Management": "資産運用",
+    "Specialty Chemicals": "特殊化学品"
+}
+
+def get_token_from_file(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            token = file.readline().strip()
+        return token
+    except Exception as e:
+        print(f"Error reading token from file: {e}")
+        return None
+
+refresh_token = get_token_from_file(".token/jquants_refresh_token")
 
 # 文字列を数値に変換する関数
 def string_to_float(value):
@@ -68,6 +149,62 @@ def is_increasing(data, normalized_tolerance = 0.2):
         prev_value = value
     
     return True
+
+#def get_id_token(refresh_token):
+#    r_post = requests.post(
+#        f"https://api.jquants.com/v1/token/auth_refresh?refreshtoken={refresh_token}"
+#    )
+#    id_token = r_post.json()['idToken']
+#    return id_token
+#
+#def get_jquants_company_info(code, id_token):
+#    try:
+#        url = f"https://api.jquants.com/v1/listed/info?code={code}"
+#        headers = {
+#            "Authorization": f"Bearer {id_token}"
+#        }
+#        response = requests.get(url, headers=headers)
+#        response.raise_for_status()
+#        
+#        json_response = response.json()
+#        print(json_response)
+#
+#        info = json_response.get("info", [])
+#        if info and len(info) > 0:
+#            company_info = info[0]
+#            return [company_info.get("Sector17CodeName"), company_info.get("Sector33CodeName")]
+#        else:
+#            return ['None3', 'None3']
+#    
+#    except requests.exceptions.RequestException as e:
+#        print(f"Error getting company info for code {code}: {e}")
+#        return ['None4', 'None4']
+
+#
+# セクター、産業、上場しているかを返す
+#
+def get_company_info(code):
+    symbol = code + ".T"
+    try:
+        ticker = yf.Ticker(symbol)
+        ticker_info = ticker.info
+        if not ticker_info:
+            return ["None1", "None1", False]
+        hist = ticker.history(period="1d")
+        if hist.empty:
+            #sector, industry = get_jquants_company_info(code, id_token)
+            return ["上場廃止", "上場廃止", False]
+    except Exception as e:
+        print(f"Error retrieving data for {symbol}: {e}")
+        return ["None2", "None2", False]
+    
+    sector = ticker_info.get('sector', f'{symbol}のセクター情報が見つかりませんでした')
+    industry = ticker_info.get('industry', f'{symbol}の業界情報が見つかりませんでした')
+    
+    sector = sector_dict.get(sector, sector)
+    industry = industry_dict.get(industry, industry)
+    
+    return [sector, industry, True]
 
 def extract_company_data(relative_url):
     url = f'{base_url}{relative_url}'
@@ -194,9 +331,10 @@ def extract_company_data(relative_url):
         "securities_report_url": securities_report_url
     }
 
+
 for year in years:
     # DEBUG: 特定の年をデバッグする用
-    if year != 2016: continue
+    if year != 2015: continue
 
     input_file = f'output/urls/companies_{year}.tsv'
     output_file = f'output/companies_{year}_detail.tsv'
@@ -212,18 +350,17 @@ for year in years:
         header = next(reader)
         writer.writerow([
             '買', '企業名', 'コード', 'ビジネスモデル', 'テンバガー指標', 'ノーバガー指標',
-            'PER', '何倍株か', '決算', '決算伸び率%', '17業種', '33業種',
-            'IPO情報URL', '有価証券報告書', 'IR', '事業内容',
-            '想定時価総額（億円）', '会社設立', '上場日','市場', '株主名と比率',
+            'PER', '何倍株か', 'Sector', 'Industry',
+            'IPO情報URL', 'IR', '事業内容', '上場1年以内での最低時価総額', '有価証券報告書', 
+            '決算', '決算伸び率%', '想定時価総額（億円）', '会社設立', '上場日','市場', '株主名と比率',
             '企業業績のデータ（5年分）', '管理人からのコメント', '会社URL'
         ])
         
         market_name_re = r'【([^】]+)】'
+        #id_token = get_id_token(refresh_token)
 
         rows = list(reader)
         for index, row in enumerate(tqdm(rows, desc="Processing")):
-        #for index, row in enumerate(reader):
-
             if len(row) == 3:
                 relative_url = row[2]
                 data = extract_company_data(relative_url)
@@ -233,12 +370,14 @@ for year in years:
 
                 company_name, code, ipo_info_url = row
                 full_ipo_info_url = f'{base_url}{ipo_info_url}'
+                ir_url = "https://irbank.net/" + code + "/ir"
+                sector, industry, is_listed = get_company_info(code)
 
                 writer.writerow([
                     "", company_name, code, "", "", "",
-                    "", "", "", "", "", "",
-                    full_ipo_info_url, data['securities_report_url'], "https://irbank.net/" + code + "/ir", data['business_content'],
-                    data['market_capital'], data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
+                    "", "", sector, industry,
+                    full_ipo_info_url, ir_url, data['business_content'], "", data['securities_report_url'],
+                    "", "", data['market_capital'], data['company_establishment'], data['listing_date'], market_name, data['shareholders'],
                     data['performance_data'], data['admin_comment'], data['company_url']
                 ])
 
