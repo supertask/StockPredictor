@@ -4,7 +4,7 @@ function analyzeStocks() {
   const MARKET_CAP_THRESHOLD = 250;
   const MULTIPLE_THRESHOLDS = [5, 7, 10]; // 5倍, 7倍, 10倍の閾値
   const CEO_SHARE_RANGES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]; // 社長株%の範囲
-  const MARKET_CAP_RANGES = [0, 50, 100, 1000, Infinity]; // 時価総額の範囲
+  const MARKET_CAP_RANGES = [0, 50, 100, 150, 200, 250, 300, 400, 500, 1000, Infinity]; // 時価総額の範囲
   var sheetNames = ["2015", "2016"]; // 必要に応じてシート名を追加
 
   // スプレッドシートの取得
@@ -105,15 +105,15 @@ function analyzeStocks() {
       return ((count / tenXStocksData.length) * 100).toFixed(1);
     });
 
-    // 結果をシートに表示（既存の表と3列間隔をあける）
-    var ceoHoldingRow = 1;
-    var ceoLabelStartColumn = resultSheet.getLastColumn() + 3;
-    var chartValStartColunn = ceoLabelStartColumn + 1;
+    // 結果をシートに表示（既存の表と2列間隔をあける）
+    var ceoHoldingRow = 15;
+    var ceoLabelStartColumn = resultSheet.getLastColumn() + 2;
+    var ceoChartValStartColunn = ceoLabelStartColumn + 1;
     resultSheet.getRange(ceoHoldingRow, ceoLabelStartColumn, 1, 1).setValue("社長株保有率別");
     resultSheet.getRange(ceoHoldingRow + 1, ceoLabelStartColumn, CEO_SHARE_RANGES.length - 1, 1).setValues(CEO_SHARE_RANGES.slice(1).map(function(range, i) {
       return [[CEO_SHARE_RANGES[i] + " ~ " + range + "%"]];
     }));
-    resultSheet.getRange(ceoHoldingRow + 1, chartValStartColunn, CEO_SHARE_RANGES.length - 1, 1).setValues(ceoShareDistribution.map(function(value) {
+    resultSheet.getRange(ceoHoldingRow + 1, ceoChartValStartColunn, CEO_SHARE_RANGES.length - 1, 1).setValues(ceoShareDistribution.map(function(value) {
       return [value];
     }));
 
@@ -135,13 +135,13 @@ function analyzeStocks() {
 
     // 時価総額別の結果をシートに表示
     var marketCaptialRow = ceoHoldingRow;
-    var capitalLabelStartColumn = resultSheet.getLastColumn() + 3;
-    chartValStartColunn = capitalLabelStartColumn + 1;
+    var capitalLabelStartColumn = resultSheet.getLastColumn() + 2;
+    var capitalChartValStartColunn = capitalLabelStartColumn + 1;
     resultSheet.getRange(marketCaptialRow, capitalLabelStartColumn, 1, 1).setValue("時価総額別");
     resultSheet.getRange(marketCaptialRow + 1, capitalLabelStartColumn, MARKET_CAP_RANGES.length - 1, 1).setValues(MARKET_CAP_RANGES.slice(1).map(function(range, i) {
       return [[MARKET_CAP_RANGES[i] + " ~ " + (range === Infinity ? "以上" : range + "億")]];
     }));
-    resultSheet.getRange(marketCaptialRow + 1, chartValStartColunn, MARKET_CAP_RANGES.length - 1, 1).setValues(marketCapDistribution.map(function(value) {
+    resultSheet.getRange(marketCaptialRow + 1, capitalChartValStartColunn, MARKET_CAP_RANGES.length - 1, 1).setValues(marketCapDistribution.map(function(value) {
       return [value];
     }));
 
@@ -161,13 +161,13 @@ function analyzeStocks() {
 
     // Sector別の結果をシートに表示
     var sectorRow = ceoHoldingRow;
-    var sectorLabelStartColumn = resultSheet.getLastColumn() + 3;
-    chartValStartColunn = sectorLabelStartColumn + 1;
+    var sectorLabelStartColumn = resultSheet.getLastColumn() + 2;
+    var sectorChartValStartColunn = sectorLabelStartColumn + 1;
     resultSheet.getRange(sectorRow, sectorLabelStartColumn, 1, 1).setValue("Sector別");
     resultSheet.getRange(sectorRow + 1, sectorLabelStartColumn, Object.keys(sectorCounts).length, 1).setValues(Object.keys(sectorCounts).map(function(value) {
       return [value];
     }));
-    resultSheet.getRange(sectorRow + 1, chartValStartColunn, sectorDistribution.length, 1).setValues(sectorDistribution.map(function(value) {
+    resultSheet.getRange(sectorRow + 1, sectorChartValStartColunn, sectorDistribution.length, 1).setValues(sectorDistribution.map(function(value) {
       return [value];
     }));
 
@@ -187,33 +187,38 @@ function analyzeStocks() {
 
     // Industry別の結果をシートに表示
     var industryRow = ceoHoldingRow;
-    industryLabelStartColumn = resultSheet.getLastColumn() + 3;
-    chartValStartColunn = industryLabelStartColumn + 1;
+    industryLabelStartColumn = resultSheet.getLastColumn() + 2;
+    var industryChartValStartColunn = industryLabelStartColumn + 1;
     resultSheet.getRange(industryRow, industryLabelStartColumn, 1, 1).setValue("Industry別");
     resultSheet.getRange(industryRow + 1, industryLabelStartColumn, Object.keys(industryCounts).length, 1).setValues(Object.keys(industryCounts).map(function(value) {
       return [value];
     }));
-    resultSheet.getRange(industryRow + 1, chartValStartColunn, industryDistribution.length, 1).setValues(industryDistribution.map(function(value) {
+    resultSheet.getRange(industryRow + 1, industryChartValStartColunn, industryDistribution.length, 1).setValues(industryDistribution.map(function(value) {
       return [value];
     }));
 
     // 円グラフの作成
-    createPieChart(resultSheet, "社長株保有率別", ceoHoldingRow + 1, chartValStartColunn, ceoShareDistribution.length, ceoLabelStartColumn);
-    createPieChart(resultSheet, "時価総額別", marketCaptialRow + 1, chartValStartColunn, marketCapDistribution.length, capitalLabelStartColumn);
-    createPieChart(resultSheet, "Sector別", sectorRow + 1, chartValStartColunn, sectorDistribution.length, sectorLabelStartColumn);
-    createPieChart(resultSheet, "Industry別", industryRow + 1, chartValStartColunn, industryDistribution.length, industryLabelStartColumn);
+    createPieChart(resultSheet, "社長株保有率別", ceoHoldingRow + 1, ceoChartValStartColunn, ceoShareDistribution.length, ceoLabelStartColumn);
+    createPieChart(resultSheet, "時価総額別", marketCaptialRow + 1, capitalChartValStartColunn, marketCapDistribution.length, capitalLabelStartColumn);
+    createPieChart(resultSheet, "Sector別", sectorRow + 1, sectorChartValStartColunn, sectorDistribution.length, sectorLabelStartColumn);
+    createPieChart(resultSheet, "Industry別", industryRow + 1, industryChartValStartColunn, industryDistribution.length, industryLabelStartColumn);
   });
 }
+
 function createPieChart(sheet, title, row, column, length, labelColumn) {
-  Logger.log(row + ", " + column + ", " + 1 +  ", " + length );
+  //Logger.log(row + ", " + column + ", " + length +  ", " + 1 );
 
   // データを取得
   var labels = sheet.getRange(row, labelColumn, length, 1).getValues().flat();
   var values = sheet.getRange(row, column, length, 1).getValues().flat();
+  //Logger.log(labels);
+  //Logger.log(values);
 
   // データを多い順にソート
   var data = labels.map((label, index) => [label, parseFloat(values[index])]);
   data.sort((a, b) => b[1] - a[1]);
+  //Logger.log(labels);
+  Logger.log(values);
 
   // ソートしたデータを新しい範囲に設定
   sheet.getRange(row, labelColumn, length, 1).setValues(data.map(item => [item[0]]));
@@ -221,15 +226,15 @@ function createPieChart(sheet, title, row, column, length, labelColumn) {
 
   // グラフの作成
   var range = sheet.getRange(row, labelColumn, length, 2); // ラベルと値の範囲を選択
+  //Logger.log(range.getValues() );
+
   var chart = sheet.newChart()
     .setChartType(Charts.ChartType.PIE)
     .addRange(range)
-    .setPosition(row + 3, column + 1, 0, 0) // セルの参照を使用して位置を設定
+    .setPosition(1, labelColumn, 0, 0) // セルの参照を使用して位置を設定
     .setOption('title', title)
-    .setOption('width', 400) // 幅を設定
-    .setOption('height', 300) // 高さを設定
-    .setNumHeaders(1)
-    .setTransposeRowsAndColumns(false) // 行と列を切り替えない
+    .setOption('width', 300) // 幅を設定
+    .setOption('height', 200) // 高さを設定
     .build();
 
   sheet.insertChart(chart);
