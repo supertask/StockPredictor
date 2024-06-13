@@ -28,10 +28,45 @@ sector_dict = {
     "Industrials": "産業",
     "Financial Services": "金融サービス",
     "Basic Materials": "基礎材料",
-    "Energy": "エネルギー"
+    "Energy": "エネルギー",
+    "Utilities": "公共事業"
 }
 
 industry_dict = {
+    "Auto & Truck Dealerships": "自動車・トラック販売",
+    "Lodging": "宿泊施設",
+    "Waste Management": "廃棄物管理",
+    "Chemicals": "化学製品",
+    "Education & Training Services": "教育・訓練サービス",
+    "Travel Services": "旅行サービス",
+    "Consulting Services": "コンサルティングサービス",
+    "Mortgage Finance": "住宅ローン金融",
+    "Apparel Manufacturing": "衣料品製造",
+    "Integrated Freight & Logistics": "統合貨物・物流",
+    "Furnishings, Fixtures & Appliances": "家具、備品、家電",
+    "Lumber & Wood Production": "木材・木製品生産",
+    "REIT - Specialty": "REIT - 特殊",
+    "Specialty Business Services": "専門ビジネスサービス",
+    "Software - Application": "ソフトウェア - アプリケーション",
+    "Semiconductors": "半導体",
+    "Food Distribution": "食品流通",
+    "Leisure": "レジャー",
+    "Software - Infrastructure": "ソフトウェア - インフラストラクチャ",
+    "REIT - Industrial": "REIT - 産業",
+    "Conglomerates": "コングロマリット",
+    "Communication Equipment": "通信機器",
+    "Real Estate - Development": "不動産開発",
+    "Luxury Goods": "高級品",
+    "Electronic Gaming & Multimedia": "電子ゲーム・マルチメディア",
+    "Advertising Agencies": "広告代理店",
+    "Specialty Chemicals": "特殊化学品",
+    "Business Equipment & Supplies": "業務用機器・用品",
+    "Consumer Electronics": "コンシューマーエレクトロニクス",
+    "Pharmaceuticals - Specialty & Generic": "医薬品 - 専門・ジェネリック",
+    "Health Information Services": "健康情報サービス",
+    "Specialty Retail": "専門小売",
+    "Utilities - Renewable": "再生可能エネルギー",
+    "Engineering & Construction": "工学・建設",
     "Consumer Defensive": "消費者防衛",
     "Consumer Cyclical": "消費者循環",
     "Real Estate": "不動産",
@@ -46,18 +81,12 @@ industry_dict = {
     "Personal Services": "個人サービス",
     "Real Estate Services": "不動産サービス",
     "Entertainment": "娯楽",
-    "Advertising Agencies": "広告代理店",
-    "Electronic Gaming & Multimedia": "電子ゲーム・マルチメディア",
     "Telecom Services": "電気通信サービス",
-    "Software - Infrastructure": "ソフトウェア - インフラストラクチャ",
-    "Leisure": "レジャー",
     "Drug Manufacturers - Specialty & Generic": "医薬品メーカー - 専門・ジェネリック",
     "Internet Content & Information": "インターネットコンテンツ・情報",
     "Tools & Accessories": "ツール・アクセサリー",
     "Information Technology Services": "情報技術サービス",
     "REIT - Hotel & Motel": "REIT - ホテル・モーテル",
-    "Software - Application": "ソフトウェア - アプリケーション",
-    "Specialty Business Services": "専門ビジネスサービス",
     "Credit Services": "信用サービス",
     "Banks - Regional": "銀行 - 地域",
     "Insurance - Life": "保険 - 生命",
@@ -65,7 +94,6 @@ industry_dict = {
     "Biotechnology": "バイオテクノロジー",
     "Publishing": "出版",
     "Internet Retail": "インターネット小売",
-    "Engineering & Construction": "工学・建設",
     "Apparel Retail": "衣料品小売",
     "Building Materials": "建材",
     "Packaged Foods": "包装食品",
@@ -77,18 +105,32 @@ industry_dict = {
     "Staffing & Employment Services": "人材派遣・雇用サービス",
     "REIT - Diversified": "REIT - 多様化",
     "Resorts & Casinos": "リゾート・カジノ",
-    "Electronic Components": "電子部品",
     "Electronics & Computer Distribution": "電子機器・コンピュータ流通",
     "Residential Construction": "住宅建設",
-    "Semiconductors": "半導体",
     "REIT - Healthcare Facilities": "REIT - 医療施設",
     "Farm Products": "農産物",
     "Asset Management": "資産運用",
-    "Specialty Chemicals": "特殊化学品"
+    "Real Estate - Diversified": "不動産 - 多様化",
+    "Footwear & Accessories": "フットウェア＆アクセサリー",
+    "Railroads": "鉄道",
+    "Medical Care Facilities": "医療施設",
+    "Capital Markets": "資本市場",
+    "Grocery Stores": "食料品店",
+    "Telecommunication Services": "電気通信サービス",
+    "Computer Hardware": "コンピュータハードウェア",
+    "Department Stores": "百貨店",
+    "Insurance - Diversified": "多様化保険",
+    "Paper & Paper Products": "紙・紙製品",
+    "Metal Fabrication": "金属製造",
+    "Medical Distribution": "医療流通",
+    "Packaging & Containers": "包装および容器",
+    "Rental & Leasing Services": "レンタルおよびリースサービス",
+    "Security & Protection Services": "セキュリティおよび保護サービス",
+    "Specialty Business Services": "専門ビジネスサービス",
+    "Medical Devices & Supplies": "医療機器・用品",
+    "REIT - Retail": "REIT - 小売",
+    "REIT - Office": "REIT - オフィス"
 }
-
-
-empty_dict = { }
 
 
 def get_token_from_file(file_path):
@@ -111,14 +153,14 @@ def string_to_float(value):
 
 def clean_value(value, company_name, relative_url):
     try:
-        if value == "-" or value == "(-)" or value == "（-）":
+        if value == '' or value == "-" or value == "(-)" or value == "（-）":
             return None
         else:
             value = value.strip('()（）%％')
             value = value.replace(",", "").replace('△', '-')
             return float(value)
     except ValueError as e:
-        print(f"ValueError for {company_name} at {base_url}{relative_url}: {e}")
+        print(f"ValueError at value '{value}' for {company_name} at {base_url}{relative_url}: {e}")
         return None
         
 
@@ -230,7 +272,8 @@ def get_company_info(code):
         ticker_info = ticker.info
         if not ticker_info:
             return ["None1", "None1", "廃止"]
-        hist = ticker.history(period="1d")
+        #hist = ticker.history(period="5d")
+        hist = ticker.history(period="1mo")
         if hist.empty:
             #sector, industry = get_jquants_company_info(code, id_token)
             return ["", "", "廃止"]
@@ -382,7 +425,7 @@ def main():
 
     for year in years:
         # DEBUG: 特定の年をデバッグする用
-        if not year in [2015, 2016]: continue
+        if not year in [2015, 2016, 2017, 2018, 2019]: continue
 
         input_file = f'output/urls/companies_{year}.tsv'
         output_file = f'output/companies_{year}_detail.tsv'
@@ -396,12 +439,12 @@ def main():
             next(reader) # headerをスキップ
 
             header_row = [
-                "買", "企業名", "最大何倍株", "現在何倍株", "コード", "ビジネスモデル", "参入障壁",
+                "買", "企業名", "最大何倍株", "現在何倍株", "コード", "ビジネスモデル", "参入障壁あるか", "参入障壁の詳細",
                 "社長株%", "想定時価総額（億円）", "時価総額_上場1年以内（億円）", "ノーバガー指標",
-                "何年で5倍株", "何年で10倍株", "何年で最大N倍株", "Sector", "Industry", "上場廃止", "PER",
-                "IPO情報URL", "IR", "有価証券報告書", "事業内容", "備考",
+                "5,7,10,N倍まで何年", "Sector", "Industry", "上場廃止", "PER",
+                "IPO情報URL", "IR", "有価証券報告書", "会社URL", "事業内容", "備考",
                 "テンバガー指標", "決算", "決算伸び率%", "会社設立", "管理人からのコメント",
-                "上場日", "市場", "会社URL", "株主名と比率", "企業業績のデータ（5年分）"
+                "上場日", "市場", "株主名と比率", "企業業績のデータ（5年分）"
             ]
             writer = csv.DictWriter(outfile, fieldnames=header_row, delimiter='\t')
             writer.writeheader()
@@ -431,12 +474,11 @@ def main():
                         "現在何倍株": '',
                         "コード": code,
                         "ビジネスモデル": '',
-                        "参入障壁": '',
+                        "参入障壁あるか": '',
+                        "参入障壁の詳細": '',
                         "時価総額_上場1年以内（億円）": '',
                         "ノーバガー指標": '',
-                        "何年で5倍株": '',
-                        "何年で10倍株": '',
-                        "何年で最大N倍株": '',
+                        "5,7,10,N倍まで何年": '',
                         "Sector": sector,
                         "Industry": industry,
                         "上場廃止": unlisted,
