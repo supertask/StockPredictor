@@ -1,4 +1,5 @@
 const BIG_INT = 9999999;
+const TABLES_ROW = 35;
 
 function processCategoryData(data, categoryKey, nXStocksData, categoryYearsToNX, categoryNXCounts) {
   var categoryCounts = {};
@@ -65,8 +66,7 @@ function displayCategoryData(resultSheet, categoryData, categoryStatsRow, catego
 
   // ratioに基づいてデータをソート
   data.sort(function(a, b) {
-    //return b.ratio - a.ratio;
-    return a.median - b.median;
+    return a.median - b.median; //return b.ratio - a.ratio;
   });
 
   // ソート済みデータをスプレッドシートに設定
@@ -79,19 +79,12 @@ function displayCategoryData(resultSheet, categoryData, categoryStatsRow, catego
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 4, 1, 1).setValue(item.median);
   });
 
-  // データをフィルタリングして、棒グラフ用に整形する
-  var filteredData = data.filter(function(item) {
+  // 5倍まで何年（中央値）が書かれていない項目（-）を除外したデータを返す
+  return data.filter(function(item) {
     return item.median !== BIG_INT;
-    //return item.median !== "-";
-  }).map(function(item) {
-    return {
-      category: item.category,
-      median: parseFloat(item.median)
-    };
   });
-
-  return filteredData;
 }
+
 
 function analyzeStocks() {
   // 定数の定義
@@ -246,7 +239,7 @@ function analyzeStocks() {
     });
 
     // 結果をシートに表示（既存の表と2列間隔をあける）
-    var ceoHoldingRow = 15;
+    var ceoHoldingRow = TABLES_ROW;
     var ceoLabelStartColumn = resultSheet.getLastColumn() + 2;
     var ceoChartValStartColunn = ceoLabelStartColumn + 1;
     resultSheet.getRange(ceoHoldingRow, ceoLabelStartColumn, 1, 1).setValue("社長株保有率別");
@@ -329,54 +322,75 @@ function analyzeStocks() {
 
     var filteredIndustryData = displayCategoryData(resultSheet, { categoryCounts: industryData.categoryCounts, categoryNXCounts: industryNXCounts, categoryYearsToNXAvg: industryData.categoryYearsToNXAvg, categoryYearsToNXMedian: industryData.categoryYearsToNXMedian }, industryStatsRow, industryLabelStartColumn, industryChartValStartColunn);
 
-    // 円グラフの作成
-    createPieChart(resultSheet, "社長株保有率別", ceoHoldingRow + 1, ceoChartValStartColunn, ceoShareDistribution.length, ceoLabelStartColumn);
-    createPieChart(resultSheet, "時価総額別", marketCaptialRow + 1, capitalChartValStartColunn, marketCapDistribution.length, capitalLabelStartColumn);
+    createPieChart(resultSheet, "社長株保有率別", ceoHoldingRow + 1, ceoLabelStartColumn, ceoShareDistribution.length, 1, ceoLabelStartColumn);
+    createPieChart(resultSheet, "時価総額別", marketCaptialRow + 1, capitalLabelStartColumn, marketCapDistribution.length, 15, ceoLabelStartColumn);
 
-    createBarChart(resultSheet, "Sector別", sectorStatsRow + 1, sectorChartValStartColunn + 4, filteredSectorData, sectorLabelStartColumn, 650, 350);
-    createBarChart(resultSheet, "Industry別", industryRow + 1, industryChartValStartColunn + 4, filteredIndustryData, industryLabelStartColumn, 650, 350);
+    createBarChart(resultSheet, "Sector別", filteredSectorData, sectorStatsRow + 1, sectorLabelStartColumn, 700, 500);
+    createBarChart(resultSheet, "Industry別", filteredIndustryData, industryRow + 1, industryLabelStartColumn, 1250, 700);
 
-    //createPieChart(resultSheet, "Sector別", sectorStatsRow + 1, sectorChartValStartColunn, Object.keys(sectorData.categoryCounts).length, sectorLabelStartColumn);
-    //createPieChart(resultSheet, "Industry別", industryRow + 1, industryChartValStartColunn, Object.keys(industryData.categoryCounts).length, industryLabelStartColumn);
   });
 }
 
-function createBarChart(sheet, title, row, column, data, labelColumn, width, height) {
+function createBarChart(sheet, title, filteredData, row, labelColumn, width, height) {
+  // データの作成
+  var labels = filteredData.map(item => [item.category]);
+  var medians = filteredData.map(item => [item.median]);
+  var ratios = filteredData.map(item => [item.ratio]);
+
+  var startRow = row;
+  var startColumn = labelColumn;
+
+  var labelRange = sheet.getRange(startRow, startColumn, labels.length, 1);
+  labelRange.setValues(labels);
+
+  var medianRange = sheet.getRange(startRow, startColumn + 1, medians.length, 1);
+  medianRange.setValues(medians);
+
+  var ratioRange = sheet.getRange(startRow, startColumn + 2, ratios.length, 1);
+  ratioRange.setValues(ratios);
+
   // グラフの作成
-  var labels = data.map(function(item) { return item.category; });
-  var values = data.map(function(item) { return item.median; });
-
-  var labelRange = sheet.getRange(row, labelColumn, labels.length, 1).setValues(labels.map(function(label) { return [label]; })); // ラベルの範囲を選択
-  var dataRange = sheet.getRange(row, column, values.length, 1).setValues(values.map(function(value) { return [value]; })); // データの範囲を選択
-
   var chart = sheet.newChart()
-    .setChartType(Charts.ChartType.BAR)
+    .setChartType(Charts.ChartType.COLUMN) // 縦の棒グラフに変更
     .addRange(labelRange)
-    .addRange(dataRange)
-    .setPosition(1, labelColumn, 0, 0) // セルの参照を使用して位置を設定
+    .addRange(medianRange)
+    .addRange(ratioRange)
+    .setPosition(1, startColumn, 0, 0) // セルの参照を使用して位置を設定
     .setOption('title', title)
     .setOption('width', width) // 幅を設定
     .setOption('height', height) // 高さを設定
-    .setOption('legend', { position: 'none' })
-    .setOption('hAxis', { title: 'Years to ' + title.split(" ")[0], minValue: 0 })
-    .setOption('vAxis', { title: title.split(" ")[0] })
+    .setOption('legend', {position: 'top', fontSize: 11 })
+    .setOption('vAxes', {
+      0: { title: 'Years', minValue: 0, maxValue: 7 },  // 左軸（5倍まで何年（中央値））
+      1: { title: 'Percentage', minValue: 0, maxValue: 75 } // 右軸（5倍の会社割合（％））
+    })
+    .setOption('series', {
+      0: { targetAxisIndex: 0, color: 'blue', labelInLegend: '5倍まで何年（中央値）' }, // 凡例に名前を設定
+      1: { targetAxisIndex: 1, color: 'red', labelInLegend: '5倍の会社割合（％）' }
+    })
+    .setOption('hAxis', {
+      title: title.split(" ")[0],
+      slantedText: true,
+      slantedTextAngle: 45, // X軸のテキストを45度傾ける
+      textStyle: { fontSize: 11 } // テキストのサイズを変更
+    })
+    //.setOption('hAxis', { title: title.split(" ")[0] }) // X軸のタイトルを設定
     .build();
 
   sheet.insertChart(chart);
 }
 
-
-function createPieChart(sheet, title, row, column, length, labelColumn) {
+function createPieChart(sheet, title, row, column, length, visualizeRow, visualizeColumn) {
   // グラフの作成
-  var range = sheet.getRange(row, labelColumn, length, 2); // ラベルと値の範囲を選択
+  var range = sheet.getRange(row, column, length, 2); // ラベルと値の範囲を選択
 
   var chart = sheet.newChart()
     .setChartType(Charts.ChartType.PIE)
     .addRange(range)
-    .setPosition(1, labelColumn, 0, 0) // セルの参照を使用して位置を設定
+    .setPosition(visualizeRow, visualizeColumn, 0, 0) // セルの参照を使用して位置を設定
     .setOption('title', title)
-    .setOption('width', 300) // 幅を設定
-    .setOption('height', 200) // 高さを設定
+    .setOption('width', 500) // 幅を設定
+    .setOption('height', 270) // 高さを設定
     .build();
 
   sheet.insertChart(chart);
