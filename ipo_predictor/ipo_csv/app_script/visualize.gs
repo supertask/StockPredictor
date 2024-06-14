@@ -1,5 +1,50 @@
-const BIG_INT = 9999999;
+// 定数の定義
+const CEO_SHAREHOLDERS_MIN = 0.1;
+const CEO_SHAREHOLDERS_MAX = 100.0;
+const MARKET_CAP_THRESHOLD = 250;
+const MULTIPLE_THRESHOLDS = [5, 7, 10]; // 5倍, 7倍, 10倍の閾値
+const CEO_SHARE_RANGES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]; // 社長株%の範囲
+const MARKET_CAP_RANGES = [0, 50, 100, 150, 200, 250, 300, 400, 500, 1000, Infinity]; // 時価総額の範囲
+var SHEET_NAMES = ["2015", "2016", "2017", "2018", "2019"];
 const TABLES_ROW = 35;
+
+
+const BIG_INT = 9999999;
+const NO_BAGGER_INDUSTRIES = [
+  "家庭用品・個人用品", "娯楽", "ソフトウェア - インフラストラクチャ", "レジャー", "ツール・アクセサリー", "REIT - ホテル・モーテル", "信用サービス",
+  "銀行 - 地域", "保険 - 生命", "レストラン", "出版", "工学・建設", "建材", "不動産 - 多様化", "人材派遣・雇用サービス", "REIT - 住宅", "石油・ガス精製・販売",
+  "医療機器・用品", "特殊産業機械", "リゾート・カジノ", "電子機器・コンピュータ流通", "住宅建設", "REIT - 医療施設", "農産物", "資産運用", "住宅ローン金融",
+  "REIT - 多様化", "REIT - 特殊", "フットウェア＆アクセサリー", "鉄道", "化学製品", "健康情報サービス", "医療施設", "資本市場", "食品流通", "食料品店", "旅行サービス",
+  "REIT - 産業", "宿泊施設", "衣料品製造", "統合貨物・物流", "家具、備品、家電", "木材・木製品生産", "通信機器", "不動産開発", "高級品", "業務用機器・用品",
+  "コンシューマーエレクトロニクス", "専門小売", "コンピュータハードウェア", "百貨店", "多様化保険", "紙・紙製品", "金属製造", "医療流通", "包装および容器",
+  "レンタルおよびリースサービス", "セキュリティおよび保護サービス", "REIT - オフィス", "REIT - 小売"
+];
+
+const STRONG_INDUSTRIES = [
+  "不動産_不動産サービス", //不動産の10倍株は結構簡単そう
+  //"技術_情報技術サービス",
+  //"産業_専門ビジネスサービス",
+  //"通信サービス_インターネットコンテンツ・情報",
+  //"ヘルスケア_バイオテクノロジー",
+  //"産業_コンサルティングサービス",
+  //"消費者防衛_教育・訓練サービス",
+  //"通信サービス_広告代理店",
+  //"技術_ソフトウェア - アプリケーション",
+  //"通信サービス_電気通信サービス",
+  //"ヘルスケア_医薬品メーカー - 専門・ジェネリック",
+  //"消費者循環_個人サービス",
+  //"消費者循環_衣料品小売",
+  //"技術_電子部品",
+  //"消費者循環_インターネット小売",
+  //"技術_半導体",
+  //"基礎材料_特殊化学品",
+  //"消費者防衛_包装食品",
+  //"消費者循環_自動車・トラック販売",
+  //"産業_廃棄物管理",
+  //"公共事業_再生可能エネルギー",
+  //"産業_コングロマリット",
+  //"通信サービス_電子ゲーム・マルチメディア"
+];
 
 function processCategoryData(data, categoryKey, nXStocksData, categoryYearsToNX, categoryNXCounts) {
   var categoryCounts = {};
@@ -73,7 +118,7 @@ function displayCategoryData(resultSheet, categoryData, categoryStatsRow, catego
   data.forEach(function(item, index) {
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryLabelStartColumn, 1, 1).setValue(item.category);
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn, 1, 1).setValue(item.ratio || "0");
-    resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 1, 1, 1).setValue(item.categoryNXCount || "0");
+    resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 1, 1, 1).setValue(Math.floor(item.categoryNXCount) || "0");
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 2, 1, 1).setValue(item.categoryCount || "0");
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 3, 1, 1).setValue(item.avg);
     resultSheet.getRange(categoryStatsRow + 1 + index, categoryChartValStartColunn + 4, 1, 1).setValue(item.median);
@@ -84,41 +129,120 @@ function displayCategoryData(resultSheet, categoryData, categoryStatsRow, catego
     return item.median !== BIG_INT;
   });
 }
+function generateConditionTable(resultSheet, N_BAGGER_THRESHOLD, marketCapThreshold, data, row) {
+
+  // 全体の割合計算
+  var totalStocks = data.length;
+  var nXStocks = data.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var nXPercentage = ((nXStocks / totalStocks) * 100).toFixed(1);
+
+  // 社長株%の割合計算
+  var ceoFilterData = data.filter(function(stock) {
+    return CEO_SHAREHOLDERS_MIN <= stock.ceoShare && stock.ceoShare <= CEO_SHAREHOLDERS_MAX;
+  });
+  var ceoNXStocks = ceoFilterData.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var ceoTotalStocks = ceoFilterData.length;
+  var ceoNXPercentage = ((ceoNXStocks / ceoTotalStocks) * 100).toFixed(1);
+
+  // 時価総額の割合計算
+  var marketCapFilterData = data.filter(function(stock) {
+    return stock.marketCap <= marketCapThreshold;
+  });
+  var marketCapNXStocks = marketCapFilterData.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var marketCapTotalStocks = marketCapFilterData.length;
+  var marketCapNXPercentage = ((marketCapNXStocks / marketCapTotalStocks) * 100).toFixed(1);
+
+  // ノーバガー産業を除く
+  var noBaggerFilterData = data.filter(function(stock) {
+    return !NO_BAGGER_INDUSTRIES.includes(stock.industry);
+  });
+  var noBaggerNXStocks = noBaggerFilterData.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var noBaggerTotalStocks = noBaggerFilterData.length;
+  var noBaggerNXPercentage = ((noBaggerNXStocks / noBaggerTotalStocks) * 100).toFixed(1);
+
+  // 「不動産 - 多様化」かつ「不動産サービス」
+  var realEstateFilterData = data.filter(function(stock) {
+    return stock.industry === "不動産 - 多様化" || stock.industry === "不動産サービス";
+  });
+  var realEstateNXStocks = realEstateFilterData.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var realEstateTotalStocks = realEstateFilterData.length;
+  var realEstateNXPercentage = ((realEstateNXStocks / realEstateTotalStocks) * 100).toFixed(1);
+
+  // 「インターネットコンテンツ・情報」かつ「ソフトウェア - アプリケーション」
+  var adSoftwareFilterData = data.filter(function(stock) {
+    return stock.industry === "インターネットコンテンツ・情報" || stock.industry === "ソフトウェア - アプリケーション";
+  });
+  var adSoftwareNXStocks = adSoftwareFilterData.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var adSoftwareTotalStocks = adSoftwareFilterData.length;
+  var adSoftwareNXPercentage = ((adSoftwareNXStocks / adSoftwareTotalStocks) * 100).toFixed(1);
+
+  // 条件を組み合わせた割合計算
+  var combinedFilterData1 = data.filter(function(stock) {
+    return CEO_SHAREHOLDERS_MIN <= stock.ceoShare && stock.ceoShare <= CEO_SHAREHOLDERS_MAX
+      && stock.marketCap <= marketCapThreshold;
+  });
+  var combinedNXStocks1 = combinedFilterData1.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var combinedTotalStocks1 = combinedFilterData1.length;
+  var combinedNXPercentage1 = ((combinedNXStocks1 / combinedTotalStocks1) * 100).toFixed(1);
+
+  var combinedFilterData2 = combinedFilterData1.filter(function(stock) {
+    return !NO_BAGGER_INDUSTRIES.includes(stock.industry);
+  });
+  var combinedNXStocks2 = combinedFilterData2.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var combinedTotalStocks2 = combinedFilterData2.length;
+  var combinedNXPercentage2 = ((combinedNXStocks2 / combinedTotalStocks2) * 100).toFixed(1);
+
+  var combinedFilterData3 = combinedFilterData2.filter(function(stock) {
+    return stock.industry === "不動産 - 多様化" || stock.industry === "不動産サービス";
+  });
+  var combinedNXStocks3 = combinedFilterData3.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var combinedTotalStocks3 = combinedFilterData3.length;
+  var combinedNXPercentage3 = ((combinedNXStocks3 / combinedTotalStocks3) * 100).toFixed(1);
+
+  var combinedFilterData4 = combinedFilterData2.filter(function(stock) {
+    return stock.industry === "インターネットコンテンツ・情報" || stock.industry === "ソフトウェア - アプリケーション";
+  });
+  var combinedNXStocks4 = combinedFilterData4.filter(function(stock) {
+    return stock.maxMultiple >= N_BAGGER_THRESHOLD;
+  }).length;
+  var combinedTotalStocks4 = combinedFilterData4.length;
+  var combinedNXPercentage4 = ((combinedNXStocks4 / combinedTotalStocks4) * 100).toFixed(1);
+
+  // 結果をシートに表示
+  resultSheet.appendRow(["", "条件", N_BAGGER_THRESHOLD + "倍株 %"]);
+  resultSheet.appendRow(["", "全体", nXPercentage]);
+  resultSheet.appendRow(["条件①", CEO_SHAREHOLDERS_MIN + " <= 社長株 % <= " + CEO_SHAREHOLDERS_MAX, ceoNXPercentage]);
+  resultSheet.appendRow(["条件②", "時価総額_上場1年以内 <= " + marketCapThreshold + "億円", marketCapNXPercentage]);
+  resultSheet.appendRow(["条件③", "ノーバガー産業を除く", noBaggerNXPercentage]);
+  resultSheet.appendRow(["条件④", "「不動産 - 多様化」かつ「不動産サービス」", realEstateNXPercentage]);
+  resultSheet.appendRow(["条件⑤", "「インターネットコンテンツ・情報」かつ「ソフトウェア - アプリケーション」", adSoftwareNXPercentage]);
+  resultSheet.appendRow(["", "条件 ①と②", combinedNXPercentage1]);
+  resultSheet.appendRow(["", "条件 ①と②と③", combinedNXPercentage2]);
+  resultSheet.appendRow(["", "条件 ①と②と③と④", combinedNXPercentage3]);
+  resultSheet.appendRow(["", "条件 ①と②と③と⑤", combinedNXPercentage4]);
+}
+
 
 
 function analyzeStocks() {
-  // 定数の定義
-  const CEO_SHAREHOLDERS_THRESHOLD = 1;
-  const MARKET_CAP_THRESHOLD = 250;
-  const MULTIPLE_THRESHOLDS = [5, 7, 10]; // 5倍, 7倍, 10倍の閾値
-  const CEO_SHARE_RANGES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]; // 社長株%の範囲
-  const MARKET_CAP_RANGES = [0, 50, 100, 150, 200, 250, 300, 400, 500, 1000, Infinity]; // 時価総額の範囲
-  const STRONG_INDUSTRIES = [
-    "不動産_不動産サービス", //不動産の10倍株は結構簡単そう
-    //"技術_情報技術サービス",
-    //"産業_専門ビジネスサービス",
-    //"通信サービス_インターネットコンテンツ・情報",
-    //"ヘルスケア_バイオテクノロジー",
-    //"産業_コンサルティングサービス",
-    //"消費者防衛_教育・訓練サービス",
-    //"通信サービス_広告代理店",
-    //"技術_ソフトウェア - アプリケーション",
-    //"通信サービス_電気通信サービス",
-    //"ヘルスケア_医薬品メーカー - 専門・ジェネリック",
-    //"消費者循環_個人サービス",
-    //"消費者循環_衣料品小売",
-    //"技術_電子部品",
-    //"消費者循環_インターネット小売",
-    //"技術_半導体",
-    //"基礎材料_特殊化学品",
-    //"消費者防衛_包装食品",
-    //"消費者循環_自動車・トラック販売",
-    //"産業_廃棄物管理",
-    //"公共事業_再生可能エネルギー",
-    //"産業_コングロマリット",
-    //"通信サービス_電子ゲーム・マルチメディア"
-  ];
-  var sheetNames = ["2015", "2016", "2017", "2018", "2019"];
 
   // スプレッドシートの取得
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -135,7 +259,7 @@ function analyzeStocks() {
     var data = [];
 
     // 各シートからデータを取得
-    sheetNames.forEach(function(sheetName) {
+    SHEET_NAMES.forEach(function(sheetName) {
       var sheet = ss.getSheetByName(sheetName);
       if (!sheet) return;
 
@@ -165,59 +289,8 @@ function analyzeStocks() {
       }
     });
 
-    // 分析
-    var totalStocks = data.length;
-    var nXStocks = data.filter(function(stock) {
-      return stock.maxMultiple >= N_BAGGER_THRESHOLD;
-    }).length;
-
-    // 結果を計算
-    var nXPercentage = ((nXStocks / totalStocks) * 100).toFixed(1);
-
-    // フィルタ条件の分析
-    var ceoFilterData = data.filter(function(stock) {
-      return stock.ceoShare >= CEO_SHAREHOLDERS_THRESHOLD;
-    });
-    var ceoNXStocks = ceoFilterData.filter(function(stock) {
-      return stock.maxMultiple >= N_BAGGER_THRESHOLD;
-    }).length;
-    var ceoTotalStocks = ceoFilterData.length;
-    var ceoNXPercentage = ((ceoNXStocks / ceoTotalStocks) * 100).toFixed(1);
-
-    var marketCapFilterData = data.filter(function(stock) {
-      return stock.marketCap <= MARKET_CAP_THRESHOLD;
-    });
-    var marketCapNXStocks = marketCapFilterData.filter(function(stock) {
-      return stock.maxMultiple >= N_BAGGER_THRESHOLD;
-    }).length;
-    var marketCapTotalStocks = marketCapFilterData.length;
-    var marketCapNXPercentage = ((marketCapNXStocks / marketCapTotalStocks) * 100).toFixed(1);
-
-    var ceoAndMarketCapFilterData = data.filter(function(stock) {
-      return stock.ceoShare >= CEO_SHAREHOLDERS_THRESHOLD && stock.marketCap <= MARKET_CAP_THRESHOLD;
-    });
-    var ceoAndMarketCapNXStocks = ceoAndMarketCapFilterData.filter(function(stock) {
-      return stock.maxMultiple >= N_BAGGER_THRESHOLD;
-    }).length;
-    var ceoAndMarketCapTotalStocks = ceoAndMarketCapFilterData.length;
-    var ceoAndMarketCapNXPercentage = ((ceoAndMarketCapNXStocks / ceoAndMarketCapTotalStocks) * 100).toFixed(1);
-
-    var ceoMarketCapAndIndustryFilterData = ceoAndMarketCapFilterData.filter(function(stock) {
-      return STRONG_INDUSTRIES.includes(stock.sector + "_" + stock.industry);
-    });
-    var ceoMarketCapAndIndustryNXStocks = ceoMarketCapAndIndustryFilterData.filter(function(stock) {
-      return stock.maxMultiple >= N_BAGGER_THRESHOLD;
-    }).length;
-    var ceoMarketCapAndIndustryTotalStocks = ceoMarketCapAndIndustryFilterData.length;
-    var ceoMarketCapAndIndustryNXPercentage = ((ceoMarketCapAndIndustryNXStocks / ceoMarketCapAndIndustryTotalStocks) * 100).toFixed(1);
-
-    // 結果をシートに表示
-    resultSheet.appendRow(["条件", N_BAGGER_THRESHOLD + "倍株 %"]);
-    resultSheet.appendRow(["全体", nXPercentage]);
-    resultSheet.appendRow(["社長株 % >= " + CEO_SHAREHOLDERS_THRESHOLD, ceoNXPercentage]);
-    resultSheet.appendRow(["時価総額_上場1年以内 <= " + MARKET_CAP_THRESHOLD + "億円", marketCapNXPercentage]);
-    resultSheet.appendRow(["社長株 % >= " + CEO_SHAREHOLDERS_THRESHOLD + "かつ時価総額_上場1年以内 <= " + MARKET_CAP_THRESHOLD + "億円", ceoAndMarketCapNXPercentage]);
-    resultSheet.appendRow(["社長株 % >= " + CEO_SHAREHOLDERS_THRESHOLD + "かつ時価総額_上場1年以内 <= " + MARKET_CAP_THRESHOLD + "億円かつ強い産業", ceoMarketCapAndIndustryNXPercentage]);
+    //N倍株になる確率を出力する
+    generateConditionTable(resultSheet, N_BAGGER_THRESHOLD, MARKET_CAP_THRESHOLD, data, 2);
 
     // 社長株%の範囲ごとの割合を計算
     var ceoShareDistribution = new Array(CEO_SHARE_RANGES.length - 1).fill(0);
@@ -325,29 +398,18 @@ function analyzeStocks() {
     createPieChart(resultSheet, "社長株保有率別", ceoHoldingRow + 1, ceoLabelStartColumn, ceoShareDistribution.length, 1, ceoLabelStartColumn);
     createPieChart(resultSheet, "時価総額別", marketCaptialRow + 1, capitalLabelStartColumn, marketCapDistribution.length, 15, ceoLabelStartColumn);
 
-    createBarChart(resultSheet, "Sector別", filteredSectorData, sectorStatsRow + 1, sectorLabelStartColumn, 700, 500);
-    createBarChart(resultSheet, "Industry別", filteredIndustryData, industryRow + 1, industryLabelStartColumn, 1250, 700);
-
+    createBarChart(resultSheet, "Sector別", N_BAGGER_THRESHOLD, filteredSectorData, sectorStatsRow + 1, sectorLabelStartColumn, 700, 500);
+    createBarChart(resultSheet, "Industry別", N_BAGGER_THRESHOLD, filteredIndustryData, industryRow + 1, industryLabelStartColumn, 1250, 700);
   });
 }
 
-function createBarChart(sheet, title, filteredData, row, labelColumn, width, height) {
-  // データの作成
-  var labels = filteredData.map(item => [item.category]);
-  var medians = filteredData.map(item => [item.median]);
-  var ratios = filteredData.map(item => [item.ratio]);
 
-  var startRow = row;
-  var startColumn = labelColumn;
+function createBarChart(sheet, title, nBaggerThreshold, filteredData, row, column, width, height) {
+  //Logger.log("length: " + filteredData.length);
 
-  var labelRange = sheet.getRange(startRow, startColumn, labels.length, 1);
-  labelRange.setValues(labels);
-
-  var medianRange = sheet.getRange(startRow, startColumn + 1, medians.length, 1);
-  medianRange.setValues(medians);
-
-  var ratioRange = sheet.getRange(startRow, startColumn + 2, ratios.length, 1);
-  ratioRange.setValues(ratios);
+  var labelRange = sheet.getRange(row, column, filteredData.length, 1);
+  var ratioRange = sheet.getRange(row, column + 1, filteredData.length, 1);
+  var medianRange = sheet.getRange(row, column + 5, filteredData.length, 1);
 
   // グラフの作成
   var chart = sheet.newChart()
@@ -355,7 +417,7 @@ function createBarChart(sheet, title, filteredData, row, labelColumn, width, hei
     .addRange(labelRange)
     .addRange(medianRange)
     .addRange(ratioRange)
-    .setPosition(1, startColumn, 0, 0) // セルの参照を使用して位置を設定
+    .setPosition(1, column, 0, 0) // セルの参照を使用して位置を設定
     .setOption('title', title)
     .setOption('width', width) // 幅を設定
     .setOption('height', height) // 高さを設定
@@ -365,8 +427,8 @@ function createBarChart(sheet, title, filteredData, row, labelColumn, width, hei
       1: { title: 'Percentage', minValue: 0, maxValue: 75 } // 右軸（5倍の会社割合（％））
     })
     .setOption('series', {
-      0: { targetAxisIndex: 0, color: 'blue', labelInLegend: '5倍まで何年（中央値）' }, // 凡例に名前を設定
-      1: { targetAxisIndex: 1, color: 'red', labelInLegend: '5倍の会社割合（％）' }
+      0: { targetAxisIndex: 0, color: 'blue', labelInLegend: nBaggerThreshold + '倍まで何年（中央値）' }, // 凡例に名前を設定
+      1: { targetAxisIndex: 1, color: 'red', labelInLegend: nBaggerThreshold + '倍の会社割合（％）' }
     })
     .setOption('hAxis', {
       title: title.split(" ")[0],
