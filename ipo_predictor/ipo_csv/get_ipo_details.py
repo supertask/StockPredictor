@@ -425,7 +425,7 @@ def main():
 
     for year in years:
         # DEBUG: 特定の年をデバッグする用
-        if not year in [2015, 2016, 2017, 2018, 2019]: continue
+        if not year in [2015, 2016, 2017, 2018, 2019, 2023, 2024]: continue
 
         input_file = f'output/urls/companies_{year}.tsv'
         output_file = f'output/companies_{year}_detail.tsv'

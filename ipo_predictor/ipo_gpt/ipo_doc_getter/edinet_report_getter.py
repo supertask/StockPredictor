@@ -1,15 +1,20 @@
+import os
 import requests
 import zipfile
 import io
 import pandas as pd
 import urllib3
 import chardet
+from datetime import datetime, timedelta
 
 # Suppress the InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-api_key = open('../.token/edinet_api_key', 'r').read().rstrip()
-
+# Constants
+API_KEY_PATH = '.token/edinet_api_key'
+API_KEY = open(API_KEY_PATH, 'r').read().rstrip()
+BASE_URL = "https://api.edinet-fsa.go.jp/api/v2/documents"
+OUTPUT_DIR = 'output/ipo_reports'
 
 class EdinetReportGetter:
 
@@ -34,64 +39,78 @@ class EdinetReportGetter:
       }
 
   def documents_json(self, date):
-    url = "https://api.edinet-fsa.go.jp/api/v2/documents.json"
     params = {
       "type" : 2,
       "date" : date,
-      "Subscription-Key": api_key
+      "Subscription-Key": API_KEY
     }
-    res = requests.get(url, params=params, verify=False)
+    res = requests.get(BASE_URL + ".json", params=params, verify=False)
     return res.json()['results']
 
   def document_detail(self, date, doc_id):
-    url = f"https://api.edinet-fsa.go.jp/api/v2/documents/{doc_id}"
     params = {
       "type" : 5, #csv
       "date" : date,
-      "Subscription-Key": api_key
+      "Subscription-Key": API_KEY
     }
-    res = requests.get(url, params=params, verify=False)
+    res = requests.get(f"{BASE_URL}/{doc_id}", params=params, verify=False)
     tsv_df = self.extract_tsv_from_zip(res)
-    doc_dict = {}
+    doc_list = []
     for key, securities_type in self.securities_items.items():
       matching_row = tsv_df[tsv_df["要素ID"] == key]
       if matching_row.empty:
-        doc_dict[securities_type] = None
+        doc_list.append([securities_type, None])
       else:
-        doc_dict[securities_type] = matching_row["値"].values[0]
-      #print(f"{securities_type}: {doc_data[securities_type]}")
-    return doc_dict
-
+        doc_list.append([securities_type, matching_row["値"].values[0]])
+    return doc_list
 
   def extract_tsv_from_zip(self, response):
       with zipfile.ZipFile(io.BytesIO(response.content)) as the_zip:
           for file_name in the_zip.namelist():
               if file_name.startswith('XBRL_TO_CSV/jpcrp') and file_name.endswith('.csv'):
-                  print(file_name)
                   with the_zip.open(file_name) as the_file:
                       raw_data = the_file.read()
                       result = chardet.detect(raw_data)
                       encoding = result['encoding']
-                      #print(f"Detected encoding: {encoding}")
                       df = pd.read_csv(io.BytesIO(raw_data), encoding=encoding, sep='\t')
                       return df
       return None
-  
-  def save_securities_reports(self, company_codes = ['55880']):
-    #date_str = "2023-11-14"
-    date_str = "2024-03-28"
-    doc_metas = self.documents_json(date_str)
 
+  def save_securities_reports_in_one_day(self, date_str, company_dict):
+    doc_metas = self.documents_json(date_str)
+    company_5codes = [code4 + '0' for code4 in company_dict.keys()]
     for meta in doc_metas:
-      if meta['secCode'] in company_codes:
-        # 有価証券報告書 = 030000
-        # 四半期報告書　 = 043000
+      code5 = meta['secCode']
+      if code5 in company_5codes:
         if meta['csvFlag'] == '1' and meta['ordinanceCode'] == '010' and (
             meta['formCode'] == '030000' or meta['formCode'] == '043000'):
           print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
-          doc_dict = self.document_detail(date_str, meta['docID'])
-          print(doc_dict)
+          doc_list = self.document_detail(date_str, meta['docID'])
+          code4 = code5[:-1]
+          company_name = company_dict[code4]
+          if meta['formCode'] == '030000':
+            folder = 'annual_securities_reports'
+            doc_name = '有価証券報告書'
+          else:
+            folder = 'quarter_securities_reports'
+            doc_name = '四半期報告書'
+
+          company_folder = f"{OUTPUT_DIR}/{code4}_{company_name}/{folder}"
+          os.makedirs(company_folder, exist_ok=True)
+          file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
+          pd.DataFrame(doc_list, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
+          print(f"Saved: {file_path}")
+
+  def save_securities_reports(self, company_dict):
+    today = datetime.today()
+    print(company_dict)
+    for i in range(365 * 2):
+      date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
+      print(date_str)
+      self.save_securities_reports_in_one_day(date_str, company_dict)
 
 if __name__ == "__main__":
   tsv = EdinetReportGetter()
-  tsv.save_securities_reports()
+  tsv.save_securities_reports(companies = {
+    '5588': 'ファーストアカウンティング'
+  })

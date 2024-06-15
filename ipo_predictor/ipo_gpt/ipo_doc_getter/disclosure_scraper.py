@@ -5,10 +5,10 @@ import traceback
 import os
 import re
 import glob
-from datetime import datetime, timedelta
 import requests
 import zipfile
 import csv
+from datetime import datetime, timedelta
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -27,6 +27,7 @@ class DisclosureScraper:
         #    os.makedirs(output_dir)
         #self.disclosure_tsv_path = os.path.join(output_dir, "disclosures_%s.tsv" % self.ipo_year)
         self.ipo_years = self.get_ipo_years()
+        self.ipo_tsv_path = f"input/ipo_companies_%s.tsv"
         self.edinet_url = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
         self.edinet_dir = "./input/Edinetcode/"
         self.edinet_csv_path = self.edinet_dir + "EdinetcodeDlInfo.csv"
@@ -284,39 +285,33 @@ class DisclosureScraper:
         return table_rows
 
     def scrape_and_save(self):
-        #self.edinet_dict = self.download_and_extract_edinet_zip()
         self.init_driver()
 
-        company_codes = []
         for ipo_year in self.ipo_years:
-            companies = self.read_companies(f"input/ipo_companies_{ipo_year}.tsv")
+            companies = self.read_companies(self.ipo_tsv_path % ipo_year)
             self.disclosure_tsv_path = os.path.join("output", f"disclosures_{ipo_year}.tsv")
 
-            # ファイルが既に存在する場合はスキップ
             if os.path.exists(self.disclosure_tsv_path):
                 print(f"{self.disclosure_tsv_path} already exists. Skipping...")
                 continue
 
-            for index, company in enumerate(companies):
-                name, code = company
-                company_codes.append(code)
-                #self.get_securities_reports(index, name, code)
-
             # TODO: 後でコメントアウトを解除
-            #for index, company in enumerate(companies):
-            #    name, code = company
-            #    #self.scrape_disclosure(index, name, code)
-
-        print(company_codes)
+            for index, company in enumerate(companies):
+                code, name = company
+                #self.scrape_disclosure(index, code, name)
 
 
-    def get_securities_reports(self, index, name, code):
-        codeW0 = code + '0'
-        if codeW0 in self.edinet_dict:
-            edinet_id = self.edinet_dict[codeW0]
-            #print(edinet_id)
+    def get_company_dict(self):
+        #self.edinet_dict = self.download_and_extract_edinet_zip()
+        company_dict = {}
+        for ipo_year in self.ipo_years:
+            companies = self.read_companies(self.ipo_tsv_path % ipo_year)
+            for index, company in enumerate(companies):
+                code, name = company
+                company_dict[code] = name
+        return company_dict
     
-    def scrape_disclosure(self, index, name, code):
+    def scrape_disclosure(self, index, code, name):
         self.scrape_disclosure()
         self.init_driver()
 
@@ -341,14 +336,13 @@ class DisclosureScraper:
             self.close_driver()
 
 
-
     def read_companies(self, filepath):
         companies = []
         with open(filepath, "r", encoding='utf-8') as file:
-            for line in file:
-                if line.strip():
-                    name, code = line.strip().split("\t")
-                    companies.append((name, code))
+            reader = csv.DictReader(file, delimiter='\t')
+            for row in reader:
+                if row['企業名'] and row['コード']:
+                    companies.append([row['コード'], row['企業名']])
         return companies
 
     def save_disclosures(self, disclosures):

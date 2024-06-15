@@ -6,7 +6,7 @@ import glob
 class PdfDownloader:
     def __init__(self, tsv_pattern):
         self.tsv_pattern = tsv_pattern
-        self.output_base_dir = "output/top_disclosure_pdf"  # デフォルトのダウンロードパス
+        self.output_base_dir = "output/ipo_reports"  # デフォルトのダウンロードパス
 
     def set_download_path(self, new_path):
         """ ダウンロードパスを変更する """
