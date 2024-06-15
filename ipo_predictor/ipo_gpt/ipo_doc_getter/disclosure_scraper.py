@@ -119,6 +119,7 @@ class DisclosureScraper:
 
     def scrape_disclosure_history(self, company_code):
         #print(company_code)
+        table_rows = []
         #
         # 法定開示情報（有価証券報告書等）を取得
         #
@@ -132,7 +133,7 @@ class DisclosureScraper:
         #yukashoken_ids = table_pair_ids[0]
         #print(yukashoken_ids)
         #rows = self.scrape_table(company_code, yukashoken_ids[0], yukashoken_ids[1], '有価証券報告書')
-        #table_rows = self.get_table_rows(company_code, rows, start_row_index=3, column_num=2)
+        #table_rows += self.get_table_rows(company_code, rows, start_row_index=3, column_num=2)
         #print("table rows", table_rows)
 
         #
@@ -154,6 +155,11 @@ class DisclosureScraper:
         rows = self.scrape_table(company_code, kettei_info_ids[0], kettei_info_ids[1], '決定事実')
         table_rows += self.get_table_rows(company_code, rows)
         #print(table_rows)
+
+        # [その他] （事業計画及び成長可能性に関する事項）
+        other_ids = table_pair_ids[3]
+        rows = self.scrape_table(company_code, other_ids[0], other_ids[1], 'その他')
+        table_rows += self.get_table_rows(company_code, rows)
 
         return table_rows
 
@@ -295,14 +301,12 @@ class DisclosureScraper:
                 print(f"{self.disclosure_tsv_path} already exists. Skipping...")
                 continue
 
-            # TODO: 後でコメントアウトを解除
             for index, company in enumerate(companies):
                 code, name = company
-                #self.scrape_disclosure(index, code, name)
+                self.scrape_disclosure(index, code, name)
 
 
     def get_company_dict(self):
-        #self.edinet_dict = self.download_and_extract_edinet_zip()
         company_dict = {}
         for ipo_year in self.ipo_years:
             companies = self.read_companies(self.ipo_tsv_path % ipo_year)
@@ -312,7 +316,6 @@ class DisclosureScraper:
         return company_dict
     
     def scrape_disclosure(self, index, code, name):
-        self.scrape_disclosure()
         self.init_driver()
 
         try:
