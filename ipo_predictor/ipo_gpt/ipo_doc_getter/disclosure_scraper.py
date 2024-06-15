@@ -6,6 +6,9 @@ import os
 import re
 import glob
 from datetime import datetime, timedelta
+import requests
+import zipfile
+import csv
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -17,7 +20,6 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 
 class DisclosureScraper:
     def __init__(self):
-        self.init_driver()
         #self.ipo_year = 2024
         #self.companies = self.read_companies("input/ipo_companies_%s.tsv" % self.ipo_year)
         #output_dir = "output"
@@ -25,6 +27,9 @@ class DisclosureScraper:
         #    os.makedirs(output_dir)
         #self.disclosure_tsv_path = os.path.join(output_dir, "disclosures_%s.tsv" % self.ipo_year)
         self.ipo_years = self.get_ipo_years()
+        self.edinet_url = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
+        self.edinet_dir = "./input/Edinetcode/"
+        self.edinet_csv_path = self.edinet_dir + "EdinetcodeDlInfo.csv"
         output_dir = "output"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -73,23 +78,82 @@ class DisclosureScraper:
         ipo_years = [re.search(r'ipo_companies_(\d{4})\.tsv', file).group(1) for file in tsv_files]
         return ipo_years
 
-    def scrape_disclosure_history(self, company_code):
+    def download_and_extract_edinet_zip(self):
+        # ディレクトリが存在しない場合は作成
+        if not os.path.exists(self.edinet_dir):
+            os.makedirs(self.edinet_dir)
+
+        # ZIPファイルのパス
+        zip_path = os.path.join(self.edinet_dir, "Edinetcode.zip")
+
+        # ZIPファイルをダウンロード
+        response = requests.get(self.edinet_url)
+        with open(zip_path, "wb") as file:
+            file.write(response.content)
+
+        # ZIPファイルを展開
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(self.edinet_dir)
+
+        # ZIPファイルを削除（必要に応じて）
+        os.remove(zip_path)
+
+        #print(f"ファイルは {self.edinet_dir} に展開されました。")
         
-        partial_id = 'closeUpKaiJi'
-        elements = self.driver.find_elements(By.XPATH, f"//*[contains(@id, '{partial_id}')]")
+        # CSVファイルを読み込み、「証券コード」をキーに「ＥＤＩＮＥＴコード」を値とする辞書を作成
+        edinet_dict = {}
+        with open(self.edinet_csv_path, "r", encoding='cp932') as csvfile:
+        #with open(self.edinet_csv_path, "r", encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            next(reader)  # 最初の行をスキップ
+            header = next(reader)  # ヘッダー行を読み込む
+            for row in reader:
+                # ヘッダーに基づいて行を辞書として解析
+                row_dict = dict(zip(header, row))
+                edinet_dict[row_dict['証券コード']] = row_dict['ＥＤＩＮＥＴコード']
+
+        #print(edinet_dict)
+        return edinet_dict
+
+
+    def scrape_disclosure_history(self, company_code):
+        #print(company_code)
+        #
+        # 法定開示情報（有価証券報告書等）を取得
+        #
+        #hotei_partial_id = 'closeUpHotei_open'
+        #elements = self.driver.find_elements(By.XPATH, f"//*[contains(@id, '{hotei_partial_id}')]")
+        #if not elements:
+        #    print(f"No elements. company_code = {company_code}")
+        #table_pair_ids = self.get_table_pair_ids(elements)
+        
+        ## 有価証券報告書を取得
+        #yukashoken_ids = table_pair_ids[0]
+        #print(yukashoken_ids)
+        #rows = self.scrape_table(company_code, yukashoken_ids[0], yukashoken_ids[1], '有価証券報告書')
+        #table_rows = self.get_table_rows(company_code, rows, start_row_index=3, column_num=2)
+        #print("table rows", table_rows)
+
+        #
+        # 適時開示（決算情報、決定事実）を取得
+        #
+        kaiji_partial_id = 'closeUpKaiJi'
+        elements = self.driver.find_elements(By.XPATH, f"//*[contains(@id, '{kaiji_partial_id}')]")
         if not elements:
             print(f"No elements. company_code = {company_code}")
         table_pair_ids = self.get_table_pair_ids(elements)
     
         # [決算情報], Table ID 'closeUpKaiJi0_open'
         kessan_info_ids = table_pair_ids[0]
-        rows = self.scrape_table(company_code, kessan_info_ids[0], kessan_info_ids[1])
-        table_rows = self.get_table_rows(company_code, rows)
+        rows = self.scrape_table(company_code, kessan_info_ids[0], kessan_info_ids[1], '決算情報')
+        table_rows += self.get_table_rows(company_code, rows)
 
         # [決定事実 / 発生事実], Table ID 'closeUpKaiJi117_open'
         kettei_info_ids = table_pair_ids[1]
-        rows = self.scrape_table(company_code, kettei_info_ids[0], kettei_info_ids[1])
+        rows = self.scrape_table(company_code, kettei_info_ids[0], kettei_info_ids[1], '決定事実')
         table_rows += self.get_table_rows(company_code, rows)
+        #print(table_rows)
+
         return table_rows
 
     def get_table_pair_ids(self, elements):
@@ -135,7 +199,7 @@ class DisclosureScraper:
             traceback.print_exc()
             return False
 
-    def scrape_table(self, company_code, closed_table_id, opened_table_id):
+    def scrape_table(self, company_code, closed_table_id, opened_table_id, doc_type):
         try:
             body = self.driver.find_element(By.TAG_NAME, 'body')
 
@@ -159,7 +223,7 @@ class DisclosureScraper:
             more_info_button.click()
             time.sleep(random.uniform(1.6, 2))
             more_info_button_exists = True
-            print(f"Finished to click [決算情報]の「さらに表示する」: {company_code}")
+            print(f"Finished to click 「{doc_type}」 の「さらに表示する」: {company_code}")
         except Exception as e:
             print(f"ERROR OCCURED: {e}")
             traceback.print_exc()
@@ -167,7 +231,7 @@ class DisclosureScraper:
 
         try:
             rows = disclosure_table.find_elements(By.TAG_NAME, "tr")
-            print(f"Finished to get table([決算情報]) rows: {company_code}")
+            print(f"Finished to get table 「{doc_type}」 rows: {company_code}")
             return rows
         except Exception as e:
             print(f"ERROR OCCURED: {e}")
@@ -181,26 +245,38 @@ class DisclosureScraper:
         return None
 
 
-    def get_table_rows(self, company_code, rows):
+    def get_table_rows(self, company_code, rows, start_row_index = 2, column_num = 4):
         if len(rows) < 3:
             print("No disclosure information available.")
             return []
         
         table_rows = []
-        for row in rows[2:]:  # Skipping header rows
+        for row in rows[start_row_index:]:  # Skipping header rows
             cols = row.find_elements(By.TAG_NAME, "td")
             
-            if len(cols) < 4:
+            if len(cols) < column_num:
                 continue
 
             raw_date = cols[0].text.strip()
+
             if raw_date == "-":
                 break
-
-            link_element = cols[1].find_element(By.TAG_NAME, "a")
+            
+            # ここで WebDriverWait を使用して、<a> エレメントが存在するまで待つ
+            try:
+                link_element = WebDriverWait(row, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "a"))
+                )
+            except NoSuchElementException:
+                print(f"No <a> element found in row: {row.text}")
+                continue
             title = link_element.text.strip()
+            #print("title", title)
             date = self.convert_date_format_revised(raw_date)
+            #print("date = ", raw_date, date)
+
             url = link_element.get_attribute("href").strip()
+            #print("url", url)
 
             record = [date, '00:00', company_code, title, url]
             table_rows.append(record)
@@ -208,6 +284,10 @@ class DisclosureScraper:
         return table_rows
 
     def scrape_and_save(self):
+        #self.edinet_dict = self.download_and_extract_edinet_zip()
+        self.init_driver()
+
+        company_codes = []
         for ipo_year in self.ipo_years:
             companies = self.read_companies(f"input/ipo_companies_{ipo_year}.tsv")
             self.disclosure_tsv_path = os.path.join("output", f"disclosures_{ipo_year}.tsv")
@@ -219,26 +299,48 @@ class DisclosureScraper:
 
             for index, company in enumerate(companies):
                 name, code = company
-                self.init_driver()
+                company_codes.append(code)
+                #self.get_securities_reports(index, name, code)
 
-                try:
-                    print(f"Scraping: index = {index}, code = {code}, company name = {name}")
-                    found_results = self.go_to_table_page(code)
-                    if found_results:
-                        table_rows = self.scrape_disclosure_history(code)
-                        if table_rows:
-                            for row in table_rows:
-                                row.insert(2, name)  # 会社名をコードの後に挿入
-                            self.save_disclosures(table_rows)  # 都度保存
-                except Exception as e:
-                    if "503" in str(e):
-                        print(f"HTTP 503 Error encountered at index {index}. Exiting.")
-                        self.save_last_index(index)
-                        sys.exit(1)
-                    else:
-                        print(f"Error: {e}")
-                finally:
-                    self.close_driver()
+            # TODO: 後でコメントアウトを解除
+            #for index, company in enumerate(companies):
+            #    name, code = company
+            #    #self.scrape_disclosure(index, name, code)
+
+        print(company_codes)
+
+
+    def get_securities_reports(self, index, name, code):
+        codeW0 = code + '0'
+        if codeW0 in self.edinet_dict:
+            edinet_id = self.edinet_dict[codeW0]
+            #print(edinet_id)
+    
+    def scrape_disclosure(self, index, name, code):
+        self.scrape_disclosure()
+        self.init_driver()
+
+        try:
+            print(f"Scraping: index = {index}, code = {code}, company name = {name}")
+            found_results = self.go_to_table_page(code)
+            if found_results:
+                table_rows = self.scrape_disclosure_history(code)
+                if table_rows:
+                    for row in table_rows:
+                        row.insert(2, name)  # 会社名をコードの後に挿入
+                    print(table_rows)
+                    self.save_disclosures(table_rows)  # 都度保存
+        except Exception as e:
+            if "503" in str(e):
+                print(f"HTTP 503 Error encountered at index {index}. Exiting.")
+                self.save_last_index(index)
+                sys.exit(1)
+            else:
+                print(f"Error: {e}")
+        finally:
+            self.close_driver()
+
+
 
     def read_companies(self, filepath):
         companies = []

@@ -1,3 +1,5 @@
 selenium
 pypdf
 pdfplumber
+chardet
+yahoo_fin
