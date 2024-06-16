@@ -76,7 +76,8 @@ class DisclosureScraper:
 
     def get_ipo_years(self):
         tsv_files = glob.glob("input/ipo_companies_*.tsv")
-        ipo_years = [re.search(r'ipo_companies_(\d{4})\.tsv', file).group(1) for file in tsv_files]
+        #ipo_years = [re.search(r'ipo_companies_(\d{4})\.tsv', file).group(1) for file in tsv_files]
+        ipo_years = [re.search(r'ipo_companies_(.+)\.tsv', file).group(1) for file in tsv_files]
         return ipo_years
 
     def download_and_extract_edinet_zip(self):
@@ -310,6 +311,7 @@ class DisclosureScraper:
         company_dict = {}
         for ipo_year in self.ipo_years:
             companies = self.read_companies(self.ipo_tsv_path % ipo_year)
+
             for index, company in enumerate(companies):
                 code, name = company
                 company_dict[code] = name

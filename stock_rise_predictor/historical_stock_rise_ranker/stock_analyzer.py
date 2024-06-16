@@ -19,35 +19,49 @@ class StockAnalyzer:
         self.end_date = end_date
         self.data = None
         self.display_only_ajusted_stock = False
+        self.days = 60
 
     def calc_rise_and_fall_rates(self):
         """ 全ての銘柄の全ての適時開示日からどのくらい株価が上がったかを計算する
         """
         companies = self.db_manager.fetch_company_codes()
+        self.nikkei_index_data = yf.download(self.nikkei_index_symbol, start=self.start_date, end=self.end_date)
+        self.nikkei_index_adj_close = self.nikkei_index_data['Adj Close']
+        self.index_return = self.nikkei_index_adj_close.pct_change()
+
         for index, company in enumerate(companies):
+            if index < 210:
+                continue
             code_5_digits, name = company
             #print(code, name)
-            
-            if not (code_5_digits == '83160' or code_5_digits == '35630'):
-                continue
 
             # codeが全て数字であり、かつ長さが5文字の場合、最後の数字を
             if code_5_digits.isdigit() and len(code_5_digits) == 5:
                 code_4_digits = code_5_digits[:-1]
-            print(code_4_digits)
+            print(f"index = {index}, code = {code_4_digits}")
 
-            self.fetch_stock_prices(code_4_digits + '.T')
+            success = self.fetch_stock_prices(code_4_digits + '.T')
+            if not success:
+                continue
+
             date_strs = self.db_manager.fetch_disclosure_dates(code_5_digits)
             for date_str in date_strs:
                 date_str = date_str[0]
                 date = datetime.strptime(date_str, "%Y-%m-%d")
-                adj_max_rise, adj_max_fall, days_to_adj_max_rise, days_to_adj_max_fall = self.calc_rise_and_fall(start_date = date, adjusted = True)
-                max_rise, max_fall, days_to_max_rise, days_to_max_fall = self.calc_rise_and_fall(start_date = date, adjusted = False)
+                calc_data = self.calc_rise_and_fall(start_date = date, adjusted = True)
+                if not calc_data:
+                    break
+                adj_max_rise, adj_max_fall, days_to_adj_max_rise, days_to_adj_max_fall = calc_data
+
+                calc_data = self.calc_rise_and_fall(start_date = date, adjusted = False)
+                if not calc_data:
+                    break
+                max_rise, max_fall, days_to_max_rise, days_to_max_fall = calc_data
+
                 data = (adj_max_rise, adj_max_fall, days_to_adj_max_rise, days_to_adj_max_fall,
                         max_rise, max_fall, days_to_max_rise, days_to_max_fall,
                         code_5_digits, date_str,)
                 self.db_manager.update_stock_rise_into_upward_evaluation(data)
-                #print(data)
 
 
 
@@ -56,15 +70,21 @@ class StockAnalyzer:
         """
         self.individual_stock_symbol = individual_stock_symbol
         individual_stock_data = yf.download(self.individual_stock_symbol, start=self.start_date, end=self.end_date)
-        nikkei_index_data = yf.download(self.nikkei_index_symbol, start=self.start_date, end=self.end_date)
+        individual_stock_adj_close = individual_stock_data['Adj Close']
 
-        stock_return = individual_stock_data['Adj Close'].pct_change()
-        index_return = nikkei_index_data['Adj Close'].pct_change()
+        try:
+            stock_return = individual_stock_adj_close.pct_change()
+            if stock_return.empty or stock_return.isna().all():
+                print(f"No valid stock return data for {self.individual_stock_symbol}")
+                return False
+        except ValueError as e:
+            print(f"Error calculating percentage change for {self.individual_stock_symbol}: {e}")
+            return False
 
-        self.data = pd.DataFrame({'Individual_Stock': stock_return, 'Nikkei_Index': index_return}).dropna()
+        self.data = pd.DataFrame({'Individual_Stock': stock_return, 'Nikkei_Index': self.index_return}).dropna()
 
-        individual_stock_start_price = individual_stock_data['Adj Close'].iloc[0]
-        nikkei_index_start_price = nikkei_index_data['Adj Close'].iloc[0]
+        individual_stock_start_price = individual_stock_adj_close.iloc[0]
+        nikkei_index_start_price = self.nikkei_index_adj_close.iloc[0]
 
         X = sm.add_constant(self.data['Nikkei_Index'])
         model = sm.OLS(self.data['Individual_Stock'], X).fit()
@@ -78,6 +98,7 @@ class StockAnalyzer:
         self.data['Real_Individual_Stock_Price'] = individual_stock_start_price * self.data['Cumulative_Return_Individual_Stock']
         self.data['Real_Individual_Stock_Price_Adjusted'] = individual_stock_start_price * self.data['Cumulative_Return_Individual_Stock_Ajusted']
         self.data['Real_Nikkei_Index_Price'] = nikkei_index_start_price * self.data['Cumulative_Return_Nikkei_Index']
+        return True
 
     def plot_stock_prices(self):
         # Y軸の値のフォーマット
@@ -110,8 +131,8 @@ class StockAnalyzer:
         fig.tight_layout()
         plt.show()
 
-    def calc_rise_and_fall(self, start_date, days = 90, adjusted = True):
-        end_date = start_date + timedelta(days=days)
+    def calc_rise_and_fall(self, start_date, adjusted = True):
+        end_date = start_date + timedelta(days=self.days)
         #print("start = %s, end = %s" % (start_date, end_date))
         specific_period_data = self.data[(start_date <= self.data.index) & (self.data.index <= end_date)]
 
@@ -121,6 +142,10 @@ class StockAnalyzer:
             period_prices = specific_period_data['Real_Individual_Stock_Price']
         #print(period_prices)
         #print("-" * 10)
+        
+        if len(period_prices) == 0:
+            print("No price data available for the specified date range.")
+            return None
 
         start_price = period_prices.iloc[0]
         #print(start_price)
@@ -138,7 +163,7 @@ class StockAnalyzer:
         days_to_max_rise = (date_of_max_rise - start_date).days
         days_to_max_fall = (date_of_max_fall - start_date).days
 
-        return max_rise, max_fall, days_to_max_rise, days_to_max_fall
+        return (max_rise, max_fall, days_to_max_rise, days_to_max_fall, )
 
 
 

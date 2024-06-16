@@ -31,7 +31,7 @@ _rise_stock_tags = [
 	},
 	{
 		"tag": "株式分割",
-		"condition": lambda title:  "株式" in title and "分割" in title,
+		"condition": lambda title:  "株式分割" in title,
 		"prompt_path": "input/stock_splits_pdf_prompt.txt"
 	},
 	{

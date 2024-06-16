@@ -19,6 +19,7 @@ OUTPUT_DIR = 'output/ipo_reports'
 class EdinetReportGetter:
 
   def __init__(self):
+      self.searching_past_year = 10 #過去10年分を辿る
       self.securities_items = {
         "jpcrp_cor:DescriptionOfBusinessTextBlock": "事業の内容",
         "jpcrp_cor:BusinessPolicyBusinessEnvironmentIssuesToAddressEtcTextBlock": "経営方針、経営環境及び対処すべき課題等",
@@ -104,7 +105,7 @@ class EdinetReportGetter:
   def save_securities_reports(self, company_dict):
     today = datetime.today()
     print(company_dict)
-    for i in range(365 * 2):
+    for i in range(365 * self.searching_past_year):
       date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
       print(date_str)
       self.save_securities_reports_in_one_day(date_str, company_dict)
