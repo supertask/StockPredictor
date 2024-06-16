@@ -29,7 +29,7 @@ class PdfDownloader:
                         dtype={'company_code': str})
         # 古い順にソート
         df = df.sort_values(by=['company_code', 'date'])
-        
+
         # 指定した会社のPDFだけダウンロードする
         if self.downloading_pdf_codes:
             df = df[df['company_code'].isin(self.downloading_pdf_codes)]
@@ -38,11 +38,8 @@ class PdfDownloader:
         grouped = df.groupby('company_code')
 
         for company_code, group in grouped:
-            # 古い順で、説明資料から2つ、事業計画及び成長可能性から2つだけ取得する
-            explanation_materials = group[group['title'].str.contains("説明資料", regex=True)].head(2)
-            growth_potential = group[group['title'].str.contains("事業計画及び成長可能性", regex=True)].head(2)
-            
-            top_disclosures = pd.concat([explanation_materials, growth_potential]).sort_values(by='date').head(4)
+            filtered_group = group[group['title'].str.contains("決算説明資料|成長可能性", regex=True)]
+            top_disclosures = filtered_group.head(5)
             filtered_disclosures.extend(top_disclosures.to_dict('records'))
         return filtered_disclosures
     
