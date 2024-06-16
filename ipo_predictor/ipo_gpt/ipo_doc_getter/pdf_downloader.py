@@ -14,6 +14,8 @@ class PdfDownloader:
             with open(codes_file, 'r') as file:
                 codes = file.read().splitlines()
             return [code.strip() for code in codes if code.strip()]
+        else:
+            print('Company code list file, {codes_file} does not exist')
         return []
 
     def set_download_path(self, new_path):
@@ -23,7 +25,8 @@ class PdfDownloader:
     def read_tsv_and_filter(self, tsv_file):
         """ TSVファイルを読み込み、条件に合う行をフィルタリング """
         df = pd.read_csv(tsv_file, delimiter='\t', header=None,
-                        names=['date', 'time', 'company_name', 'company_code', 'title', 'url'])
+                        names=['date', 'time', 'company_name', 'company_code', 'title', 'url'],
+                        dtype={'company_code': str})
         # 古い順にソート
         df = df.sort_values(by=['company_code', 'date'])
         
