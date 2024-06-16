@@ -3,25 +3,23 @@ import subprocess
 import glob
 import pandas as pd
 class PdfDownloader:
-    def __init__(self, tsv_pattern):
-        self.tsv_pattern = tsv_pattern
+    def __init__(self, input_tsv_pattern):
+        self.downloading_pdf_codes = self.get_downloading_pdf_codes()
+        self.input_tsv_pattern = input_tsv_pattern
         self.output_base_dir = "output/ipo_reports"  # デフォルトのダウンロードパス
+
+    def get_downloading_pdf_codes(self):
+        codes_file = "./input/downloading_pdf_codes.tsv"
+        if os.path.exists(codes_file):
+            with open(codes_file, 'r') as file:
+                codes = file.read().splitlines()
+            return [code.strip() for code in codes if code.strip()]
+        return []
 
     def set_download_path(self, new_path):
         """ ダウンロードパスを変更する """
         self.output_base_dir = new_path
 
-    #def read_tsv_and_filter(self, tsv_file):
-    #    """ TSVファイルを読み込み、条件に合う行をフィルタリング """
-    #    filtered_disclosures = []
-    #    with open(tsv_file, newline='', encoding='utf-8') as tsvfile:
-    #        reader = csv.reader(tsvfile, delimiter='\t')
-    #        for row in reader:
-    #            date, time, company_name, company_code, title, url = row
-    #            if "説明資料" in title or "事業計画及び成長可能性" in title:
-    #                filtered_disclosures.append((company_name, company_code, date, url, title))
-    #    return filtered_disclosures
-        
     def read_tsv_and_filter(self, tsv_file):
         """ TSVファイルを読み込み、条件に合う行をフィルタリング """
         df = pd.read_csv(tsv_file, delimiter='\t', header=None,
@@ -29,15 +27,19 @@ class PdfDownloader:
         # 古い順にソート
         df = df.sort_values(by=['company_code', 'date'])
         
+        # 指定した会社のPDFだけダウンロードする
+        if self.downloading_pdf_codes:
+            df = df[df['company_code'].isin(self.downloading_pdf_codes)]
+        
         filtered_disclosures = []
         grouped = df.groupby('company_code')
 
         for company_code, group in grouped:
-            #print(company_code)
-            # 条件に合うものをフィルタリング
-            filtered_group = group[group['title'].str.contains("説明資料|事業計画及び成長可能性", regex=True)]
-            # 古い順に5つだけ取得
-            top_disclosures = filtered_group.head(5)
+            # 古い順で、説明資料から2つ、事業計画及び成長可能性から2つだけ取得する
+            explanation_materials = group[group['title'].str.contains("説明資料", regex=True)].head(2)
+            growth_potential = group[group['title'].str.contains("事業計画及び成長可能性", regex=True)].head(2)
+            
+            top_disclosures = pd.concat([explanation_materials, growth_potential]).sort_values(by='date').head(4)
             filtered_disclosures.extend(top_disclosures.to_dict('records'))
         return filtered_disclosures
     
@@ -89,13 +91,13 @@ class PdfDownloader:
             raise Exception(f"Download failed for {url}. Error: {result.stderr}")
 
     def download_filtered_disclosures(self):
-        tsv_files = glob.glob(self.tsv_pattern)
+        tsv_files = glob.glob(self.input_tsv_pattern)
         for tsv_file in tsv_files:
             disclosures = self.read_tsv_and_filter(tsv_file)
             self.download(disclosures)
         print('Finished')
 
 if __name__ == "__main__":
-    tsv_pattern = "output/disclosures_*.tsv"
-    downloader = PdfDownloader(tsv_pattern)
+    input_tsv_pattern = "output/disclosures_*.tsv"
+    downloader = PdfDownloader(input_tsv_pattern)
     downloader.download_filtered_disclosures()
