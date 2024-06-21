@@ -79,24 +79,41 @@ class EdinetReportGetter:
 
   def save_securities_reports_in_one_day(self, date_str, company_dict):
     doc_metas = self.documents_json(date_str)
-    company_5codes = [code4 + '0' for code4 in company_dict.keys()]
+    #company_code5s = [code4 + '0' for code4 in company_dict.keys()]
+    edinet_codes = company_dict.keys()
+
     for meta in doc_metas:
-      code5 = meta['secCode']
-      if code5 in company_5codes:
-        if meta['csvFlag'] == '1' and meta['ordinanceCode'] == '010' and (
-            meta['formCode'] == '030000' or meta['formCode'] == '043000'):
+      edinet_code = meta['edinetCode']
+      #company_code5 = meta['secCode']
+
+      if edinet_code == 'E39448':
+          print('=' * 100)
+          print(meta)
+          print('=' * 100)
+
+      #if company_code5 in company_code5s:
+
+      if edinet_code in edinet_codes:
+        if meta['csvFlag'] == '1' and (
+            meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
+            #meta['formCode'] == '030000' or meta['formCode'] == '043000'):
           print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
           doc_list = self.document_detail(date_str, meta['docID'])
-          code4 = code5[:-1]
-          company_name = company_dict[code4]
-          if meta['formCode'] == '030000':
+          #company_code4 = company_code5[:-1]
+          #company_name = company_dict[code4]
+          company = company_dict[edinet_code]
+          company_code5 = company['company_code5']
+          company_name = company['company_name']
+          company_code4 = company_code5[:-1]
+          #if meta['formCode'] == '030000':
+          if meta['docTypeCode'] == '030':
+            folder = 'securities_registration_statement'
+            doc_name = '有価証券届出書'
+          elif meta['docTypeCode'] == '120':
             folder = 'annual_securities_reports'
             doc_name = '有価証券報告書'
-          else:
-            folder = 'quarter_securities_reports'
-            doc_name = '四半期報告書'
 
-          company_folder = f"{OUTPUT_DIR}/{code4}_{company_name}/{folder}"
+          company_folder = f"{OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
           os.makedirs(company_folder, exist_ok=True)
           file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
           pd.DataFrame(doc_list, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
@@ -104,7 +121,7 @@ class EdinetReportGetter:
 
   def save_securities_reports(self, company_dict):
     today = datetime.today()
-    print(company_dict)
+    #print(company_dict)
     for i in range(365 * self.searching_past_year):
       date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
       print(date_str)

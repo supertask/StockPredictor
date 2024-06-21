@@ -114,7 +114,7 @@ class DisclosureScraper:
                 row_dict = dict(zip(header, row))
                 edinet_dict[row_dict['証券コード']] = row_dict['ＥＤＩＮＥＴコード']
 
-        #print(edinet_dict)
+        print(edinet_dict)
         return edinet_dict
 
 
@@ -308,13 +308,22 @@ class DisclosureScraper:
 
 
     def get_company_dict(self):
+        self.edinet_dict = self.download_and_extract_edinet_zip()
+
         company_dict = {}
         for ipo_year in self.ipo_years:
             companies = self.read_companies(self.ipo_tsv_path % ipo_year)
 
             for index, company in enumerate(companies):
-                code, name = company
-                company_dict[code] = name
+                company_code4, company_name = company
+                company_code5 = company_code4 + '0'
+                if company_code5 in self.edinet_dict:
+                    edinet_code = self.edinet_dict[company_code5]
+                    company_dict[edinet_code] = {
+                        'company_code5': company_code5,
+                        'company_name': company_name
+                    }
+        print(company_dict)
         return company_dict
     
     def scrape_disclosure(self, index, code, name):

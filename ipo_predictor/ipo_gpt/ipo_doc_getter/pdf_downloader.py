@@ -38,7 +38,7 @@ class PdfDownloader:
         grouped = df.groupby('company_code')
 
         for company_code, group in grouped:
-            filtered_group = group[group['title'].str.contains("決算説明資料|成長可能性", regex=True)]
+            filtered_group = group[group['title'].str.contains("決算説明会資料|決算説明資料|成長可能性", regex=True)]
             top_disclosures = filtered_group.head(5)
             filtered_disclosures.extend(top_disclosures.to_dict('records'))
         return filtered_disclosures
