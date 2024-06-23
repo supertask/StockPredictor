@@ -27,6 +27,7 @@ def main():
         # 金融庁のEDINETから有価証券報告書や四半期報告書を収集し、TSVファイルで保存
         companies_list = scraper.get_companies_list()
         edinet_getter = EdinetReportGetter()
+        #edinet_getter.save_securities_reports()
         edinet_getter.save_securities_reports(companies_list)
     elif args.action == "tdnet":
         # 証券取引所のTDNetから適時開示のPDFリンクを集めてTSVに保存
@@ -43,6 +44,7 @@ def main():
         # 3.tdnetコマンド実行で収集したTSVを元に、PDFをダウンロード
         companies_list = scraper.get_companies_list()
         edinet_getter = EdinetReportGetter()
+        #edinet_getter.save_securities_reports()
         edinet_getter.save_securities_reports(companies_list)
         scraper.scrape_and_save()
         tsv_pattern = "output/disclosures_*.tsv"

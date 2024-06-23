@@ -66,37 +66,54 @@ class EdinetReportGetter:
       #print(f"ファイルは {self.edinet_dir} に展開されました。")
       
       # CSVファイルを読み込み、「証券コード」をキーに「ＥＤＩＮＥＴコード」を値とする辞書を作成
-      edinet_dict = {}
+      code5_to_edinet_dict = {}
+      edinet_to_company_dict = {}
       with open(self.edinet_csv_path, "r", encoding='cp932') as csvfile:
-      #with open(self.edinet_csv_path, "r", encoding='utf-8') as csvfile:
           reader = csv.reader(csvfile)
           next(reader)  # 最初の行をスキップ
           header = next(reader)  # ヘッダー行を読み込む
           for row in reader:
               # ヘッダーに基づいて行を辞書として解析
               row_dict = dict(zip(header, row))
-              edinet_dict[row_dict['証券コード']] = row_dict['ＥＤＩＮＥＴコード']
+              if len(row_dict['証券コード']) == 0:
+                continue
 
-      print(edinet_dict)
-      return edinet_dict
+              code5_to_edinet_dict[row_dict['証券コード']] = {
+                'edinet_code': row_dict['ＥＤＩＮＥＴコード'],
+                'company_name': row_dict['提出者名']
+              }
+              edinet_to_company_dict[row_dict['ＥＤＩＮＥＴコード']] = {
+                'company_code': row_dict['証券コード'], #5桁
+                'company_name': row_dict['提出者名']
+              }
 
-  def get_company_dict(self, companies_list):
-      self.edinet_dict = self.download_and_extract_edinet_zip()
+      #print(code5_to_edinet_dict)
+      #print(edinet_to_company_dict)
+      return code5_to_edinet_dict, edinet_to_company_dict
 
-      company_dict = {}
+  def get_company_dict(self):
+      self.code5_to_edinet_dict, self.edinet_to_company_dict = self.download_and_extract_edinet_zip()
+      return self.edinet_to_company_dict
+
+  def get_ipo_company_dict(self, companies_list):
+      self.code5_to_edinet_dict, self.edinet_to_company_dict = self.download_and_extract_edinet_zip()
+
+      ipo_edinet_to_company_dict = {}
       for companies in companies_list:
           for index, company in enumerate(companies):
               company_code4, company_name = company
               company_code5 = company_code4 + '0'
-              if company_code5 in self.edinet_dict:
-                  edinet_code = self.edinet_dict[company_code5]
-                  company_dict[edinet_code] = {
-                      'company_code5': company_code5,
+              if company_code5 in self.code5_to_edinet_dict:
+                  edinet_info = self.code5_to_edinet_dict[company_code5]
+                  edinet_code = edinet_info['edinet_code']
+                  #company_code = edinet_info['company_code']
+                  ipo_edinet_to_company_dict[edinet_code] = {
+                      'company_code': company_code5,
                       'company_name': company_name
                   }
-      return company_dict
+      return ipo_edinet_to_company_dict
 
-  def documents_json(self, date):
+  def request_doc_json(self, date):
     params = {
       "type" : 2,
       "date" : date,
@@ -105,7 +122,7 @@ class EdinetReportGetter:
     res = requests.get(BASE_URL + ".json", params=params, verify=False)
     return res.json()['results']
 
-  def document_detail(self, date, doc_id):
+  def request_doc_elements(self, date, doc_id):
     params = {
       "type" : 5, #csv
       "date" : date,
@@ -113,14 +130,14 @@ class EdinetReportGetter:
     }
     res = requests.get(f"{BASE_URL}/{doc_id}", params=params, verify=False)
     tsv_df = self.extract_tsv_from_zip(res)
-    doc_list = []
+    doc_elements = []
     for key, securities_type in self.securities_items.items():
       matching_row = tsv_df[tsv_df["要素ID"] == key]
       if matching_row.empty:
-        doc_list.append([securities_type, None])
+        doc_elements.append([securities_type, None])
       else:
-        doc_list.append([securities_type, matching_row["値"].values[0]])
-    return doc_list
+        doc_elements.append([securities_type, matching_row["値"].values[0]])
+    return doc_elements
 
   def extract_tsv_from_zip(self, response):
       with zipfile.ZipFile(io.BytesIO(response.content)) as the_zip:
@@ -134,89 +151,50 @@ class EdinetReportGetter:
                       return df
       return None
 
-  def save_securities_reports_in_one_day(self, date_str, company_dict):
-    doc_metas = self.documents_json(date_str)
-    #company_code5s = [code4 + '0' for code4 in company_dict.keys()]
-    edinet_codes = company_dict.keys()
-
+  def save_securities_reports_in_one_day(self, date_str, edinet_to_company_dict):
+    doc_metas = self.request_doc_json(date_str)
     for meta in doc_metas:
       edinet_code = meta['edinetCode']
-      #company_code5 = meta['secCode']
+      if not edinet_code in edinet_to_company_dict:
+        continue #上場廃止である可能性があるのでスキップ
 
-      #if company_code5 in company_code5s:
-      if edinet_code in edinet_codes:
-        if meta['csvFlag'] == '1' and (
-            meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
-            #meta['formCode'] == '030000' or meta['formCode'] == '043000'):
-          print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
-          doc_list = self.document_detail(date_str, meta['docID'])
-          #company_code4 = company_code5[:-1]
-          #company_name = company_dict[code4]
-          company = company_dict[edinet_code]
-          company_code5 = company['company_code5']
-          company_name = company['company_name']
-          company_code4 = company_code5[:-1]
-          #if meta['formCode'] == '030000':
-          if meta['docTypeCode'] == '030':
-            folder = 'securities_registration_statement'
-            doc_name = '有価証券届出書'
-          elif meta['docTypeCode'] == '120':
-            folder = 'annual_securities_reports'
-            doc_name = '有価証券報告書'
+      if meta['csvFlag'] == '1' and (
+          meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
+        print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
+        company = edinet_to_company_dict[edinet_code]
+        company_code5 = company['company_code']
+        company_name = company['company_name']
 
-          company_folder = f"{OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
-          os.makedirs(company_folder, exist_ok=True)
-          file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
-          pd.DataFrame(doc_list, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
-          print(f"Saved: {file_path}")
+        if meta['docTypeCode'] == '030':
+          folder = 'securities_registration_statement'
+          doc_name = '有価証券届出書'
+        elif meta['docTypeCode'] == '120':
+          folder = 'annual_securities_reports'
+          doc_name = '有価証券報告書'
 
-  def save_securities_reports(self, companies_list):
-    company_dict = self.get_company_dict(companies_list)
+        doc_elements = self.request_doc_elements(date_str, meta['docID'])
+        company_code4 = company_code5[:-1]
+        company_folder = f"{OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
+        os.makedirs(company_folder, exist_ok=True)
+        file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
+        pd.DataFrame(doc_elements, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
+        print(f"Saved: {file_path}")
+
+  def save_securities_reports(self, companies_list = None):
+    if companies_list:
+      edinet_to_company_dict = self.get_ipo_company_dict(companies_list)
+    else:
+      edinet_to_company_dict = self.get_company_dict()
     today = datetime.today()
-    #print(companies_list)
     for i in range(365 * self.searching_past_year):
       date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
       print(date_str)
-      self.save_securities_reports_in_one_day(date_str, company_dict)
-
-
-
-#  def save_securities_reports_in_one_day(self, date_str, company_dict):
-#    doc_metas = self.documents_json(date_str)
-#    for meta in doc_metas:
-#      edinet_code = meta['edinetCode']
-#
-#      if meta['csvFlag'] == '1' and (
-#          meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
-#        #print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
-#        doc_list = self.document_detail(date_str, meta['docID'])
-#        company = company_dict[edinet_code]
-#        company_code5 = company['company_code5']
-#        company_name = company['company_name']
-#        company_code4 = company_code5[:-1]
-#        if meta['docTypeCode'] == '030':
-#          folder = 'securities_registration_statement'
-#          doc_name = '有価証券届出書'
-#        elif meta['docTypeCode'] == '120':
-#          folder = 'annual_securities_reports'
-#          doc_name = '有価証券報告書'
-#
-#        company_folder = f"{OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
-#        os.makedirs(company_folder, exist_ok=True)
-#        file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
-#        pd.DataFrame(doc_list, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
-#        print(f"Saved: {file_path}")
-#
-#  def save_securities_reports(self, companies_list):
-#    today = datetime.today()
-#    for i in range(365 * self.searching_past_year):
-#      date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
-#      print(date_str)
-#      self.save_securities_reports_in_one_day(date_str, companies_list)
+      self.save_securities_reports_in_one_day(date_str, edinet_to_company_dict)
 
 
 if __name__ == "__main__":
   tsv = EdinetReportGetter()
-  tsv.save_securities_reports(companies = {
-    'E38948': {'company_code5': '55880', 'company_name': 'ファーストアカウンティング'}
+  tsv.save_ipo_securities_reports(companies = {
+    'E38948': {'company_code': '55880', 'company_name': 'ファーストアカウンティング'}
   })
+  tsv.save_all_securities_reports()
