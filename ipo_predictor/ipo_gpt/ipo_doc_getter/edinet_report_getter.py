@@ -1,4 +1,5 @@
 import csv
+import gzip
 import os
 import requests
 import zipfile
@@ -11,19 +12,22 @@ from datetime import datetime, timedelta
 # Suppress the InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Constants
-API_KEY_PATH = '.token/edinet_api_key'
-API_KEY = open(API_KEY_PATH, 'r').read().rstrip()
-BASE_URL = "https://api.edinet-fsa.go.jp/api/v2/documents"
-OUTPUT_DIR = 'output/ipo_reports'
-
 class EdinetReportGetter:
 
   def __init__(self):
+      API_KEY_PATH = '.token/edinet_api_key'
+      self.API_KEY = open(API_KEY_PATH, 'r').read().rstrip()
+      self.BASE_URL = "https://api.edinet-fsa.go.jp/api/v2/documents"
       self.edinet_url = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
       self.edinet_dir = "./input/Edinetcode/"
       self.edinet_csv_path = self.edinet_dir + "EdinetcodeDlInfo.csv"
-      self.searching_past_year = 10 #過去10年分を辿る
+      self.OUTPUT_DIR = 'output/ipo_reports'
+      self.TMP_DIR = 'output/tmp'
+      if not os.path.exists(self.OUTPUT_DIR):
+          os.mkdir(self.OUTPUT_DIR)
+      if not os.path.exists(self.TMP_DIR):
+          os.mkdir(self.TMP_DIR)
+      self.searching_past_year = 10 #過去13年分を辿る
       self.securities_items = {
         "jpcrp_cor:DescriptionOfBusinessTextBlock": "事業の内容",
         "jpcrp_cor:BusinessPolicyBusinessEnvironmentIssuesToAddressEtcTextBlock": "経営方針、経営環境及び対処すべき課題等",
@@ -92,19 +96,19 @@ class EdinetReportGetter:
       return code5_to_edinet_dict, edinet_to_company_dict
 
   def get_company_dict(self):
-      self.code5_to_edinet_dict, self.edinet_to_company_dict = self.download_and_extract_edinet_zip()
-      return self.edinet_to_company_dict
+      code5_to_edinet_dict, edinet_to_company_dict = self.download_and_extract_edinet_zip()
+      return edinet_to_company_dict
 
   def get_ipo_company_dict(self, companies_list):
-      self.code5_to_edinet_dict, self.edinet_to_company_dict = self.download_and_extract_edinet_zip()
+      code5_to_edinet_dict, edinet_to_company_dict = self.download_and_extract_edinet_zip()
 
       ipo_edinet_to_company_dict = {}
       for companies in companies_list:
           for index, company in enumerate(companies):
               company_code4, company_name = company
               company_code5 = company_code4 + '0'
-              if company_code5 in self.code5_to_edinet_dict:
-                  edinet_info = self.code5_to_edinet_dict[company_code5]
+              if company_code5 in code5_to_edinet_dict:
+                  edinet_info = code5_to_edinet_dict[company_code5]
                   edinet_code = edinet_info['edinet_code']
                   #company_code = edinet_info['company_code']
                   ipo_edinet_to_company_dict[edinet_code] = {
@@ -117,19 +121,43 @@ class EdinetReportGetter:
     params = {
       "type" : 2,
       "date" : date,
-      "Subscription-Key": API_KEY
+      "Subscription-Key": self.API_KEY
     }
-    res = requests.get(BASE_URL + ".json", params=params, verify=False)
-    return res.json()['results']
+    try:
+        res = requests.get(self.BASE_URL + ".json", params=params, verify=False)
+        res.raise_for_status()  # HTTPエラーを確認
+        json_data = res.json()
+        if 'results' in json_data:
+            return json_data['results']
+        elif 'metadata' in json_data and json_data['metadata'].get('status') == '404':
+            raise ValueError("Error 404: The requested resource was not found.")
+        else:
+            raise KeyError("The key 'results' was not found in the response.")
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except requests.exceptions.ConnectionError as conn_err:
+        print(f"Connection error occurred: {conn_err}")
+    except requests.exceptions.Timeout as timeout_err:
+        print(f"Timeout error occurred: {timeout_err}")
+    except requests.exceptions.RequestException as req_err:
+        print(f"An error occurred: {req_err}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+    return []
 
   def request_doc_elements(self, date, doc_id):
     params = {
       "type" : 5, #csv
       "date" : date,
-      "Subscription-Key": API_KEY
+      "Subscription-Key": self.API_KEY
     }
-    res = requests.get(f"{BASE_URL}/{doc_id}", params=params, verify=False)
-    tsv_df = self.extract_tsv_from_zip(res)
+    try:
+        res = requests.get(f"{self.BASE_URL}/{doc_id}", params=params, verify=False)
+        res.raise_for_status()  # HTTPエラーが発生した場合、例外がスローされます
+        tsv_df = self.extract_tsv_from_zip(res)
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching document elements for doc_id {doc_id} on {date}: {e}")
+        return []    
     doc_elements = []
     for key, securities_type in self.securities_items.items():
       matching_row = tsv_df[tsv_df["要素ID"] == key]
@@ -152,44 +180,91 @@ class EdinetReportGetter:
       return None
 
   def save_securities_reports_in_one_day(self, date_str, edinet_to_company_dict):
-    doc_metas = self.request_doc_json(date_str)
-    for meta in doc_metas:
-      edinet_code = meta['edinetCode']
-      if not edinet_code in edinet_to_company_dict:
-        continue #上場廃止である可能性があるのでスキップ
+      doc_metas = self.request_doc_json(date_str)
+      tsv_rows = []
+      for meta in doc_metas:
+          edinet_code = meta['edinetCode']
+          if not edinet_code in edinet_to_company_dict:
+              continue # 上場廃止である可能性があるのでスキップ
 
-      if meta['csvFlag'] == '1' and (
-          meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
-        print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
-        company = edinet_to_company_dict[edinet_code]
-        company_code5 = company['company_code']
-        company_name = company['company_name']
+          if meta['csvFlag'] == '1' and (
+              meta['docTypeCode'] == '030' or meta['docTypeCode'] == '120'):
+              print(f"name = {meta['filerName']}, docDescription = {meta['docDescription']}, docId = {meta['docID']}")
+              tsv_rows.append([date_str, edinet_code, meta['docTypeCode'], meta['docID']])
+      
+      return tsv_rows
 
-        if meta['docTypeCode'] == '030':
-          folder = 'securities_registration_statement'
-          doc_name = '有価証券届出書'
-        elif meta['docTypeCode'] == '120':
-          folder = 'annual_securities_reports'
-          doc_name = '有価証券報告書'
+  def save_latest_document(self, group, doc_type_code, folder, doc_name, company_code4, company_name):
+      latest_documents = group[group['docTypeCode'] == doc_type_code].sort_values('date')
+      for i in range(len(latest_documents) - 1, -1, -1):
+          latest_document = latest_documents.iloc[i]
+          doc_elements = self.request_doc_elements(latest_document['date'], latest_document['docID'])
+          business_content_exists = False
+          for element in doc_elements:
+            if element[0] == '事業の内容':
+              business_content_exists = element[1] and len(element[1]) > 0
 
-        doc_elements = self.request_doc_elements(date_str, meta['docID'])
-        company_code4 = company_code5[:-1]
-        company_folder = f"{OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
-        os.makedirs(company_folder, exist_ok=True)
-        file_path = f"{company_folder}/{date_str}_{doc_name}.tsv"
-        pd.DataFrame(doc_elements, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
-        print(f"Saved: {file_path}")
+          if business_content_exists:
+              company_folder = f"{self.OUTPUT_DIR}/{company_code4}_{company_name}/{folder}"
+              os.makedirs(company_folder, exist_ok=True)
+              file_path = f"{company_folder}/{latest_document['date']}_{doc_name}.tsv"
+              pd.DataFrame(doc_elements, columns=['項目', '値']).to_csv(file_path, sep='\t', index=False)
+              print(f"Saved: {file_path}")
+              return
+          else:
+              #print(f"Empty '事業の内容' for docID: {latest_document['docID']} on {latest_document['date']}")
+              pass
+      print(f"\033[91mError: No valid '事業の内容' found for {company_name} ({company_code4})\033[0m")
 
-  def save_securities_reports(self, companies_list = None):
+  def download_and_save_document_metadata(self, doc_meta_path, tracking_days, edinet_to_company_dict):
+      all_data = []
+      today = datetime.today()
+      end_datetime = datetime(year=2014, month=6, day=21)  # ここからデータが存在しない
+      for d in range(tracking_days):
+          current_date = today - timedelta(days=d)
+          if current_date < end_datetime:
+              break
+          date_str = current_date.strftime('%Y-%m-%d')
+          print(date_str)
+          day_data = self.save_securities_reports_in_one_day(date_str, edinet_to_company_dict)
+          all_data.extend(day_data)
+
+      if all_data:
+          with gzip.open(doc_meta_path, 'wt', encoding='utf-8') as f:
+              pd.DataFrame(all_data, columns=['date', 'edinet_code', 'docTypeCode', 'docID']).to_csv(f, sep='\t', index=False)
+
+
+  def save_securities_reports(self, companies_list = None, skip_json = True):
+    tracking_days = int(365 * self.searching_past_year)
     if companies_list:
       edinet_to_company_dict = self.get_ipo_company_dict(companies_list)
     else:
       edinet_to_company_dict = self.get_company_dict()
-    today = datetime.today()
-    for i in range(365 * self.searching_past_year):
-      date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
-      print(date_str)
-      self.save_securities_reports_in_one_day(date_str, edinet_to_company_dict)
+
+    doc_meta_path = f"{self.TMP_DIR}/doc_indexes.tsv.gz"
+    if not os.path.exists(doc_meta_path):
+      self.download_and_save_document_metadata(doc_meta_path, tracking_days, edinet_to_company_dict)
+
+    # Load the single TSV file
+    with gzip.open(doc_meta_path, 'rt', encoding='utf-8') as f:
+        full_data = pd.read_csv(f, sep='\t', dtype={'date': str, 'edinet_code': str, 'docTypeCode': str, 'docID': str})
+
+    # Process each company to get the latest reports
+    for edinet_code, group in full_data.groupby('edinet_code'):
+        company = edinet_to_company_dict[edinet_code]
+        company_code5 = company['company_code']
+        company_name = company['company_name']
+        company_code4 = company_code5[:-1]
+        #
+        # TODO: 有価証券報告書, 有価証券報告書の中のTSVを取得し、事業内容が何も書かれてなければ,
+        # その次に最新の日付のものを取得するようにしたい。
+        # 7780: メニコンがうまくいけば問題なし
+        #
+        # 最新の有価証券届出書を保存
+        self.save_latest_document(group, '030', 'securities_registration_statement', '有価証券届出書', company_code4, company_name)
+        
+        # 最新の有価証券報告書を保存
+        self.save_latest_document(group, '120', 'annual_securities_reports', '有価証券報告書', company_code4, company_name)
 
 
 if __name__ == "__main__":

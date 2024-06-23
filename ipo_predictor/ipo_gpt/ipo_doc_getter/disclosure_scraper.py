@@ -77,44 +77,6 @@ class DisclosureScraper:
         ipo_years = [re.search(r'ipo_companies_(.+)\.tsv', file).group(1) for file in tsv_files]
         return ipo_years
 
-    #def download_and_extract_edinet_zip(self):
-    #    # ディレクトリが存在しない場合は作成
-    #    if not os.path.exists(self.edinet_dir):
-    #        os.makedirs(self.edinet_dir)
-
-    #    # ZIPファイルのパス
-    #    zip_path = os.path.join(self.edinet_dir, "Edinetcode.zip")
-
-    #    # ZIPファイルをダウンロード
-    #    response = requests.get(self.edinet_url)
-    #    with open(zip_path, "wb") as file:
-    #        file.write(response.content)
-
-    #    # ZIPファイルを展開
-    #    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-    #        zip_ref.extractall(self.edinet_dir)
-
-    #    # ZIPファイルを削除（必要に応じて）
-    #    os.remove(zip_path)
-
-    #    #print(f"ファイルは {self.edinet_dir} に展開されました。")
-    #    
-    #    # CSVファイルを読み込み、「証券コード」をキーに「ＥＤＩＮＥＴコード」を値とする辞書を作成
-    #    edinet_dict = {}
-    #    with open(self.edinet_csv_path, "r", encoding='cp932') as csvfile:
-    #    #with open(self.edinet_csv_path, "r", encoding='utf-8') as csvfile:
-    #        reader = csv.reader(csvfile)
-    #        next(reader)  # 最初の行をスキップ
-    #        header = next(reader)  # ヘッダー行を読み込む
-    #        for row in reader:
-    #            # ヘッダーに基づいて行を辞書として解析
-    #            row_dict = dict(zip(header, row))
-    #            edinet_dict[row_dict['証券コード']] = row_dict['ＥＤＩＮＥＴコード']
-
-    #    print(edinet_dict)
-    #    return edinet_dict
-
-
     def scrape_disclosure_history(self, company_code):
         #print(company_code)
         table_rows = []
@@ -302,26 +264,6 @@ class DisclosureScraper:
             for index, company in enumerate(companies):
                 code, name = company
                 self.scrape_disclosure(index, code, name)
-
-
-    #def get_company_dict(self):
-    #    self.edinet_dict = self.download_and_extract_edinet_zip()
-
-    #    company_dict = {}
-    #    for ipo_year in self.ipo_years:
-    #        companies = self.read_companies(self.ipo_tsv_path % ipo_year)
-
-    #        for index, company in enumerate(companies):
-    #            company_code4, company_name = company
-    #            company_code5 = company_code4 + '0'
-    #            if company_code5 in self.edinet_dict:
-    #                edinet_code = self.edinet_dict[company_code5]
-    #                company_dict[edinet_code] = {
-    #                    'company_code5': company_code5,
-    #                    'company_name': company_name
-    #                }
-    #    print(company_dict)
-    #    return company_dict
     
     # 各年にIPOした会社のリストを取得
     def get_companies_list(self):
