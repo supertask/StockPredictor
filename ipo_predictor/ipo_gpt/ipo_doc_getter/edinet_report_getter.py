@@ -255,11 +255,7 @@ class EdinetReportGetter:
         company_code5 = company['company_code']
         company_name = company['company_name']
         company_code4 = company_code5[:-1]
-        #
-        # TODO: 有価証券報告書, 有価証券報告書の中のTSVを取得し、事業内容が何も書かれてなければ,
-        # その次に最新の日付のものを取得するようにしたい。
-        # 7780: メニコンがうまくいけば問題なし
-        #
+
         # 最新の有価証券届出書を保存
         self.save_latest_document(group, '030', 'securities_registration_statement', '有価証券届出書', company_code4, company_name)
         
