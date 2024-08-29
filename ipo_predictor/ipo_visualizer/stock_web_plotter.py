@@ -5,13 +5,15 @@ import plotly.express as px
 # グラフをプロット
 class StockWebPlotter:
     
-    def __init__(self, data, buy_signal_days, sell_signal_days, symbol, rsi_sell_threshold, rsi_buy_threshold):
+    def __init__(self, data, buy_signal_days, sell_signal_days, symbol, rsi_sell_threshold, rsi_buy_threshold, is_regression_analysis):
         self.data = data
         self.buy_signal_days = buy_signal_days
         self.sell_signal_days = sell_signal_days
         self.symbol = symbol
         self.RSI_SELL_THRESHOLD = rsi_sell_threshold
         self.RSI_BUY_THRESHOLD = rsi_buy_threshold
+        self.is_regression_analysis = is_regression_analysis
+        self.price_column = 'AdjustedClose' if self.is_regression_analysis else 'Close'  # 表示する列を動的に設定
     
     def add_custom_css(self):
         st.markdown(
@@ -36,9 +38,9 @@ class StockWebPlotter:
         
         # 株価のグラフ
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=self.data.index, y=self.data['Close'], mode='lines', name='Close Price'))
-        fig1.add_trace(go.Scatter(x=self.buy_signal_days.index, y=self.buy_signal_days['Close'], mode='markers', name='Buy Signal', marker=dict(color=green_hex, symbol='triangle-up', size=scatter_size)))
-        fig1.add_trace(go.Scatter(x=self.sell_signal_days.index, y=self.sell_signal_days['Close'], mode='markers', name='Sell Signal', marker=dict(color='red', symbol='triangle-down', size=scatter_size)))
+        fig1.add_trace(go.Scatter(x=self.data.index, y=self.data[self.price_column], mode='lines', name='Close Price'))
+        fig1.add_trace(go.Scatter(x=self.buy_signal_days.index, y=self.buy_signal_days[self.price_column], mode='markers', name='Buy Signal', marker=dict(color=green_hex, symbol='triangle-up', size=scatter_size)))
+        fig1.add_trace(go.Scatter(x=self.sell_signal_days.index, y=self.sell_signal_days[self.price_column], mode='markers', name='Sell Signal', marker=dict(color='red', symbol='triangle-down', size=scatter_size)))
         #fig1.update_layout(title=f'{self.symbol} Stock Price and Buy/Sell Signals', xaxis_title='Date', yaxis_title='Price', margin=dict(t=20, b=20))
         fig1.update_layout(yaxis_title='Price', margin=margin, height=height)
 

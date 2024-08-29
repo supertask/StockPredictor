@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from stock_analyzer import StockAnalyzer
-from stock_web_plotter import StockWebPlotter as StockPlotter
+from stock_web_plotter import StockWebPlotter
 
 class StockApp:
     def __init__(self):
@@ -17,7 +17,7 @@ class StockApp:
         }
         self.symbol_examples = ', '.join([key + '.T' for key in self.ipo_companies.keys()])
         self.symbols = st.text_input('Enter stock symbols (comma separated)', self.symbol_examples)
-        self.start_date = st.date_input('Start Date', pd.to_datetime('2023-01-01'))
+        self.start_date = st.date_input('Start Date', pd.to_datetime('2024-01-01'))
         self.end_date = st.date_input('End Date', pd.to_datetime('today'))
         self.RSI_SELL_THRESHOLD = st.slider('RSI Sell Threshold', 50, 100, 65)
         self.RSI_BUY_THRESHOLD = st.slider('RSI Buy Threshold', 0, 50, 35)
@@ -28,20 +28,21 @@ class StockApp:
 
     def analyze_stock(self, symbol):
         self.analyzer.calculate(symbol)
-        buy_signal_days, sell_signal_days = self.analyzer.get_signals()  # 修正箇所
-        stock_info = self.analyzer.get_stock_info()  # 修正箇所
-        return buy_signal_days, sell_signal_days, self.analyzer.data, stock_info  # 修正箇所
+        buy_signal_days, sell_signal_days = self.analyzer.get_signals()
+        stock_info = self.analyzer.get_stock_info()
+        return buy_signal_days, sell_signal_days, self.analyzer.data, stock_info
 
     def display_stock(self, company_code, company_name, buy_signal_days, sell_signal_days, data, stock_info):
         with st.container():
             next_earnings_date = stock_info['next_earnings_date']
             per = stock_info['per']
+            turnover_rate = stock_info['turnover_rate']  # 売買回転率を取得
 
             markdown_head_str = f"""
             <div style='border: 2px solid; padding: 10px; margin: 10px;'>
-            <span><h3>{company_code} - {company_name}</h3><a href='https://irbank.net/{company_code}/per'>PER: {per}</a>, 決算予定：{next_earnings_date}</span>"""
+            <span><h3>{company_code} - {company_name}</h3><a href='https://irbank.net/{company_code}/per'>PER: {per}</a>, 売買回転率: {turnover_rate}, 決算予定：{next_earnings_date}</span>"""
             st.markdown(markdown_head_str, unsafe_allow_html=True)
-            plotter = StockPlotter(data, buy_signal_days, sell_signal_days, company_code, self.RSI_SELL_THRESHOLD, self.RSI_BUY_THRESHOLD)
+            plotter = StockWebPlotter(data, buy_signal_days, sell_signal_days, company_code, self.RSI_SELL_THRESHOLD, self.RSI_BUY_THRESHOLD, self.is_regression_analysis)
             plotter.plot()
             st.markdown("</div>", unsafe_allow_html=True)
 

@@ -13,6 +13,7 @@ class StockAnalyzer:
         self.buy_signal_days = None
         self.sell_signal_days = None
         self.is_regression_analysis = is_regression_analysis
+        self.price_column = 'AdjustedClose' if self.is_regression_analysis else 'Close'  # 表示する列を動的に設定
         if self.is_regression_analysis:
             self.index_data = yf.download('2516.T', start=self.start_date, end=self.end_date)
             self.index_close = self.index_data['Close']  # ここでindex_closeを定義
@@ -43,6 +44,7 @@ class StockAnalyzer:
         self.stock_info = {}
         self.stock_info['next_earnings_date'] = None
         self.stock_info['per'] = None
+        self.stock_info['turnover_rate'] = None
         
         if self.symbol != '2516.T':
             stock = yf.Ticker(self.symbol)
@@ -55,7 +57,7 @@ class StockAnalyzer:
                     self.stock_info['per'] = round(trailing_per, 1)
                 
                 #if not self.data.empty:
-                #    current_price = self.data['Close'][-1]
+                #    current_price = self.data[self.price_column][-1]
                 #    if forward_eps is not None:
                 #        per = current_price / forward_eps
                 #        self.stock_info['per'] = per
@@ -65,13 +67,13 @@ class StockAnalyzer:
 
 
     def calculate_macd(self, short_window=12, long_window=26, signal_window=9):
-        self.data['ShortEMA'] = self.data['Close'].ewm(span=short_window, adjust=False).mean()
-        self.data['LongEMA'] = self.data['Close'].ewm(span=long_window, adjust=False).mean()
+        self.data['ShortEMA'] = self.data[self.price_column].ewm(span=short_window, adjust=False).mean()
+        self.data['LongEMA'] = self.data[self.price_column].ewm(span=long_window, adjust=False).mean()
         self.data['MACD'] = self.data['ShortEMA'] - self.data['LongEMA']
         self.data['SignalLine'] = self.data['MACD'].ewm(span=signal_window, adjust=False).mean()
 
     def calculate_rsi(self, window=14):
-        delta = self.data['Close'].diff(1)
+        delta = self.data[self.price_column].diff(1)
         gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
         rs = gain / loss
