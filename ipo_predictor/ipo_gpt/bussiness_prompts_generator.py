@@ -2,6 +2,12 @@ import os
 import pandas as pd
 import re
 
+#
+# 指定したIPOの会社コードと企業名の入った `../ipo_csv/input/companies_<year>.tsv` のファイル群を `input/companies_<year>.tsv` に入れ、
+# TDNetを実行すると入力の企業の事業内容を集めて、`bussiness_<year>.tsv.txt` に保存される
+#
+# 
+#
 
 prompt_template = """
 ==========
@@ -56,7 +62,7 @@ reports_folder = './ipo_doc_getter/output/ipo_reports'
 output_folder = './output_prompts'
 
 # ファイルのリストを取得
-input_files = [f for f in os.listdir(input_folder) if f.startswith('ipo_companies_') and f.endswith('.tsv')]
+input_files = [f for f in os.listdir(input_folder) if f.startswith('companies_') and f.endswith('.tsv')]
 
 def find_report_file(code):
     # codeに該当するフォルダを見つける
@@ -84,7 +90,7 @@ def find_report_file(code):
 # 各ファイルを処理
 for input_file in input_files:
     input_path = os.path.join(input_folder, input_file)
-    # TSVファイルを読み込み
+    print("Processing ", input_path)
     df = pd.read_csv(input_path, sep='\t')
     
     results = []
@@ -105,25 +111,35 @@ for input_file in input_files:
             # 結果を保存
             results.append([code, company_name, business_content])
         else:
-            results.append([code, company_name, ''])
+            #results.append([code, company_name, ''])
             print(f"Report file not found for code: {code}")
     
-    # 出力ファイルの設定
-    output_file_base = f'business_{input_file.split("_")[-1].split(".")[0]}'
-    output_dir = os.path.join(output_folder, output_file_base)
-    os.makedirs(output_dir, exist_ok=True)
     
     # 結果を10行毎に分割して保存
     results_df = pd.DataFrame(results, columns=['コード', '企業名', '事業内容'])
     num_chunks = (len(results_df) // 10) + (1 if len(results_df) % 10 != 0 else 0)
     
-    for i in range(num_chunks):
-        chunk_df = results_df.iloc[i*10:(i+1)*10]
-        business_list = chunk_df.to_csv(sep='\t', index=False, header=False)
-        prompt_text = prompt_template % business_list
+    is_split = False
+    
+    if is_split:
+        # 分割する場合
+        output_file_base = f'business_{input_file.split("_")[-1].split(".")[0]}'
+        output_dir = os.path.join(output_folder, output_file_base)
+        os.makedirs(output_dir, exist_ok=True)
+        for i in range(num_chunks):
+            chunk_df = results_df.iloc[i*10:(i+1)*10]
+            business_list = chunk_df.to_csv(sep='\t', index=False, header=False)
+            prompt_text = prompt_template % business_list
 
-        chunk_output_path = os.path.join(output_dir, f'{output_file_base}_part_{i+1}.txt')
-        with open(chunk_output_path, 'w', encoding='utf-8') as f:
-            f.write(prompt_text)
+            chunk_output_path = os.path.join(output_dir, f'{output_file_base}_part_{i+1}.txt')
+            with open(chunk_output_path, 'w', encoding='utf-8') as f:
+                f.write(prompt_text)
+    else:
+        # 分割せず、事業内容のTSVをそのまま出力
+        output_file = f'business_{input_file.split("_")[-1]}.txt'
+        output_path = os.path.join(output_folder, output_file)
+        business_list = results_df.to_csv(sep='\t', index=False)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(business_list)
 
 print("Processing complete.")

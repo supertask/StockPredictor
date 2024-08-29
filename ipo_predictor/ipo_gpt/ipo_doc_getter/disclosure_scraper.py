@@ -21,13 +21,13 @@ from selenium.common.exceptions import NoSuchElementException, ElementNotInterac
 class DisclosureScraper:
     def __init__(self):
         #self.ipo_year = 2024
-        #self.companies = self.read_companies("input/ipo_companies_%s.tsv" % self.ipo_year)
+        #self.companies = self.read_companies("input/companies_%s.tsv" % self.ipo_year)
         #output_dir = "output"
         #if not os.path.exists(output_dir):
         #    os.makedirs(output_dir)
         #self.disclosure_tsv_path = os.path.join(output_dir, "disclosures_%s.tsv" % self.ipo_year)
         self.ipo_years = self.get_ipo_years()
-        self.ipo_tsv_path = f"input/ipo_companies_%s.tsv"
+        self.ipo_tsv_path = f"input/companies_%s.tsv"
         output_dir = "output"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -72,9 +72,9 @@ class DisclosureScraper:
         self.wait = WebDriverWait(self.driver, 10)
 
     def get_ipo_years(self):
-        tsv_files = glob.glob("input/ipo_companies_*.tsv")
-        #ipo_years = [re.search(r'ipo_companies_(\d{4})\.tsv', file).group(1) for file in tsv_files]
-        ipo_years = [re.search(r'ipo_companies_(.+)\.tsv', file).group(1) for file in tsv_files]
+        tsv_files = glob.glob("input/companies_*.tsv")
+        #ipo_years = [re.search(r'companies_(\d{4})\.tsv', file).group(1) for file in tsv_files]
+        ipo_years = [re.search(r'companies_(.+)\.tsv', file).group(1) for file in tsv_files]
         return ipo_years
 
     def scrape_disclosure_history(self, company_code):
