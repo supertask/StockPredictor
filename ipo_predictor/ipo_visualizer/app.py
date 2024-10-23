@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from stock_analyzer import StockAnalyzer
 from stock_web_plotter import StockWebPlotter
+import yfinance as yf
 
 class StockApp:
     def __init__(self):
@@ -30,7 +31,25 @@ class StockApp:
         self.analyzer.calculate(symbol)
         buy_signal_days, sell_signal_days = self.analyzer.get_signals()
         stock_info = self.analyzer.get_stock_info()
+        # 売買回転率を計算
+        turnover_rate = self.calculate_turnover_rate(symbol)
+        stock_info['turnover_rate'] = turnover_rate  # 売買回転率をstock_infoに追加
         return buy_signal_days, sell_signal_days, self.analyzer.data, stock_info
+
+    def calculate_turnover_rate(self, symbol):
+        data = yf.Ticker(symbol)
+        hist = data.history(period='1mo')
+        total_volume = hist['Volume'].sum()
+        shares_outstanding = data.info.get('sharesOutstanding', None)
+        if symbol == '160A.T':
+            shares_outstanding = 3559500
+        if symbol == '212A.T':
+            shares_outstanding = 15840000
+        if symbol == '215A.T':
+            shares_outstanding = 95139000
+        if shares_outstanding:
+            return total_volume / shares_outstanding
+        return None
 
     def display_stock(self, company_code, company_name, buy_signal_days, sell_signal_days, data, stock_info):
         with st.container():

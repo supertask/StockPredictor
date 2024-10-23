@@ -9,7 +9,7 @@ import pandas as pd
 period_str = '1mo'
 
 # 調査する銘柄リスト
-#ipo_companies = {
+ipo_companies = {
 #    '1879': '新日本建設',
 #    '3496': 'アズーム',
 #    '3774': 'インターネットイニシアティブ',
@@ -25,10 +25,16 @@ period_str = '1mo'
 #    '9166': 'ＧＥＮＤＡ',
 #    '160A': 'アズパートナーズ',
 #    '212A': 'フィットイージー',
-#}
-ipo_companies = {
-	'215A': 'タイミー',
 }
+
+ipo_companies = {
+    '2928': 'chocoZap（Rizap）',
+    '7085': 'カーブスＨ',
+    '7092': 'FFJ',
+    '212A': 'フィットイージー',
+    '2378': 'ルネサンス',
+}
+
 
 tickers = [key + '.T' for key in ipo_companies.keys()]
 
@@ -48,11 +54,13 @@ for ticker in tickers:
     # 発行済株式数を取得
     shares_outstanding = data.info.get('sharesOutstanding', None)
     if ticker == '160A.T':
-        shares_outstanding = 3559500
+        shares_outstanding = 3560000
     if ticker == '212A.T':
         shares_outstanding = 15840000
     if ticker == '215A.T':
         shares_outstanding = 95139000
+    if ticker == '2928.T':
+        shares_outstanding = 596664367
     
     if shares_outstanding:
         # 売買回転率を計算
