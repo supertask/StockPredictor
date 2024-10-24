@@ -2,29 +2,42 @@ import googlemaps
 import pandas as pd
 from datetime import datetime
 import time
+from geopy.distance import geodesic
+import argparse
 
 class GoogleReviewGetter:
     def __init__(self, api_key):
+        self.rural_prefectures = [
+            "北海道", "青森県", "岩手県", "秋田県", "山形県", "福島県",
+            "栃木県", "群馬県",
+            "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県",
+            "三重県", "奈良県", "和歌山県",
+            "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+            "徳島県", "香川県", "愛媛県", "高知県",
+            "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+        ]
         self.gmaps = googlemaps.Client(key=api_key)
-        self.SEARCH_RADIUS = 10000  # メートル単位での検索半径. 10km
-        #self.MAX_STORES = 200      # 店舗情報の最大取得件数
-        self.MAX_STORES = 20     # 店舗情報の最大取得件数
-        self.MAX_NEARBY_STORES = 40  # 最大近隣店舗件数
+        self.URBAN_NEARBY_RADIUS_KM = 5 * 2 # 都市部でジムに通う際の距離は1〜5kmであり、競合との距離はその倍の最大10km
+        self.COUNTRY_SIDE_NEARBY_RADIUS_KM = 20 * 2 #地方でジムに通う際の距離は10 ~ 20kmであり、競合との距離はその倍の40km
+        #self.MAX_TARGET_STORE_NUM = 200      # 店舗情報の最大取得件数
+        self.MAX_TARGET_STORE_NUM = 20     # 店舗情報の最大取得件数
+        self.MAX_SEARCHING_COMPETITOR_NUM = 20  # 近隣で店舗を探す際の最大件数
+        self.MAX_SAVING_COMPETITOR_NUM = 3
         self.target_company = {
             'name': 'FIT-EASY',
             'search_keyword': 'FIT-EASY',
-            'is_correct': lambda k: ('fit' in k and 'easy' in k) or ('フィット' in k and 'イージー' in k)
+            'is_correct': lambda k: (not 'パーソナル' in k) and ('fit' in k and 'easy' in k) or ('フィット' in k and 'イージー' in k)
         }
         self.competitors = [
             {
                 'name': 'Anytime Fitness',
                 'search_keyword': 'Anytime Fitness',
-                'is_correct': lambda k: ('anytime' in k and 'fitness' in k) or ('エニタイム' in k and 'フィットネス' in k)
+                'is_correct': lambda k: (not 'パーソナル' in k) and ('anytime' in k and 'fitness' in k) or ('エニタイム' in k and 'フィットネス' in k)
             }
 #            {
 #                'name': 'chocoZAP',
 #                'search_keyword': 'chocoZAP',
-#                'is_correct': lambda k: ('choco' in k and 'zap' in k) or ('チョコ' in k and 'ザップ' in k)
+#                'is_correct': lambda k: (not 'パーソナル' in k) and ('choco' in k and 'zap' in k) or ('チョコ' in k and 'ザップ' in k)
 #            }
         ]
 
@@ -32,7 +45,7 @@ class GoogleReviewGetter:
         stores = []
         next_page_token = None
 
-        while len(stores) < self.MAX_STORES:
+        while len(stores) < self.MAX_TARGET_STORE_NUM:
             # Places APIで基本情報のみを取得
             places_result = self.gmaps.places(
                 self.target_company['search_keyword'], 
@@ -52,7 +65,8 @@ class GoogleReviewGetter:
                         'rating': place.get('rating', 0),
                         'review_count': place.get('user_ratings_total', 0),
                         'company': self.target_company['name'],
-                        'target_company_num': target_company_num
+                        'target_company_num': target_company_num,
+                        'competitors_disance': 0
                     }
                     print('place: ', place)
 
@@ -70,34 +84,38 @@ class GoogleReviewGetter:
 
     def _find_nearby_competitors(self, location, stores, target_company_num):
         for competitor in self.competitors:
-            nearby_stores_count = 0
+            searching_competitor_count = 0
+            saving_competitor_count = 0
             next_page_token = None
 
-            while nearby_stores_count < self.MAX_NEARBY_STORES:
+            while searching_competitor_count < self.MAX_SEARCHING_COMPETITOR_NUM:
                 nearby_result = self.gmaps.places_nearby(
                     location=location,
-                    radius=self.SEARCH_RADIUS,
+                    rank_by='distance',
                     keyword=competitor['search_keyword'],
                     page_token=next_page_token
                 )
                 
-                # 競合の名称と一致していれば, 1件だけ保存
                 for nearest in nearby_result.get('results', []):
                     if competitor['is_correct'](nearest['name'].lower()):
-                        store_info = {
-                            'place_id': nearest['place_id'],
-                            'name': nearest['name'],
-                            'lat': nearest['geometry']['location']['lat'],
-                            'lng': nearest['geometry']['location']['lng'],
-                            'rating': nearest.get('rating', 0),
-                            'review_count': nearest.get('user_ratings_total', 0),
-                            'company': competitor['name'],
-                            'target_company_num': target_company_num
-                        }
-                        print("nearest: ", nearest)
-                        stores.append(store_info)
-                        break  # 1件保存したら次の競合へ
-                    nearby_stores_count += 1
+                        competitor_location = (nearest['geometry']['location']['lat'], nearest['geometry']['location']['lng'])
+                        distance_km = geodesic(location, competitor_location).kilometers
+                        if distance_km < self.COUNTRY_SIDE_NEARBY_RADIUS_KM and saving_competitor_count < self.MAX_SAVING_COMPETITOR_NUM:
+                            store_info = {
+                                'place_id': nearest['place_id'],
+                                'name': nearest['name'],
+                                'lat': nearest['geometry']['location']['lat'],
+                                'lng': nearest['geometry']['location']['lng'],
+                                'rating': nearest.get('rating', 0),
+                                'review_count': nearest.get('user_ratings_total', 0),
+                                'company': competitor['name'],
+                                'target_company_num': target_company_num,
+                                'competitors_disance': round(distance_km, 2)  # 距離を小数第2桁まで
+                            }
+                            print("nearest: ", nearest)
+                            stores.append(store_info)
+                            saving_competitor_count+=1
+                    searching_competitor_count += 1
 
                 next_page_token = nearby_result.get('next_page_token')
                 if not next_page_token:
@@ -135,13 +153,21 @@ def main():
     API_KEY = 'AIzaSyBwPdwD8WwieNmMyXwOGmATY3glOXvVAa8'
     reviewer = GoogleReviewGetter(API_KEY)
     
-    # 店舗情報の取得
-    stores_df = reviewer.get_store_info()
-    stores_df.to_csv('stores_data.csv', index=False, encoding='utf-8')
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('command', choices=['store', 'review', 'all'], help='Command to execute')
+    args = parser.parse_args()
+
+    if args.command in ['store', 'all']:
+        # 店舗情報の取得
+        stores_df = reviewer.get_store_info()
+        stores_df.to_csv('stores_data.csv', index=False, encoding='utf-8')
     
-    # レビュー情報の取得
-    #reviews_df = reviewer.get_reviews(stores_df)
-    #reviews_df.to_csv('reviews_data.csv', index=False, encoding='utf-8')
+    if args.command in ['review', 'all']:
+        # CSVファイルから店舗情報を読み込む
+        stores_df = pd.read_csv('stores_data.csv')
+        # レビュー情報の取得
+        reviews_df = reviewer.get_reviews(stores_df)
+        reviews_df.to_csv('reviews_data.csv', index=False, encoding='utf-8')
 
 if __name__ == "__main__":
     main()
