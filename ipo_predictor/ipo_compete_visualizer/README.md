@@ -20,7 +20,8 @@ https://zenn.dev/tomlla/articles/8216f786aeffe8
 dataframeとしては場所ID, 評価, レビューの内容, レビュー日時をCSVに保存する。
 
 600店舗のそれぞれ100件レビューを取得するのに 204ドル 必要。
-実際に取得するレビューの数は、最新の30件レビューとかでもいいのかも.
+
+Google My Business APIを利用するためには、対象のビジネスに対する管理権限が必要です。つまり、あなたがそのビジネスのオーナーか、オーナーからの承認を受けたアカウントでなければレビュー情報を取得できません。-> 毎月一回ごとに取得するとかかな
 
 https://developers.google.com/maps/documentation/places/web-service/details?hl=ja
 
